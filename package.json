@@ -1,0 +1,28 @@
+{
+  "name": "myquota-backend",
+  "version": "1.0.0",
+  "description": "MyQuota Backend - API and services for managing payment quotas",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx ts-node src/index.ts",
+    "dev": "nodemon --watch src --ext ts,js,json --exec ts-node src/index.ts"
+  },
+  "keywords": [],
+  "author": "Guillermo Cabrera",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "firebase-admin": "^12.7.0",
+    "google-auth-library": "^9.14.2",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
