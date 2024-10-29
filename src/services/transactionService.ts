@@ -42,10 +42,20 @@ export async function fetchBankEmails() {
     const res = await gmail.users.messages.list({ userId: 'me', q: query });
 
     if (res.data.messages) {
+
+        const messageIds = res.data.messages.map(message => message.id!);
+
+        // Filtrar los messageIds que ya existen en Firestore
+        const existingIds = await transactionModel.getExistingTransactionIds(messageIds);
+        const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
+
+        console.log(`Procesando ${newMessageIds.length} nuevos correos`);
+
         let batchData = [];
 
-        for (const [index, message] of res.data.messages.entries()) {
-            const email = await gmail.users.messages.get({ userId: 'me', id: message.id! });
+        for (const [index, messageId] of newMessageIds.entries()) {
+
+            const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
             let encodedMessage = email.data.payload?.body?.data;
 
             if (email.data.payload) {
@@ -58,7 +68,7 @@ export async function fetchBankEmails() {
 
                 if (amount && cardLastDigits && merchant && transactionDate) {
                     const transactionData = {
-                        id: message.id!,
+                        id: messageId,
                         amount,
                         currency,
                         card_type: 'Tarjeta de Crédito',
@@ -109,7 +119,7 @@ export function extractTransactionDataFromHtml(htmlContent: string) {
 
     // Formatear otros datos extraídos
     const cardLastDigits = lastDigitsMatch ? lastDigitsMatch[1] : null;
-    const merchant = merchantMatch ? merchantMatch[1] : null;
+    const merchant = merchantMatch ? merchantMatch[1].replace(/\s+/g, ' ').trim() : null;
     const transactionDate = dateMatch ? dateMatch[0] : null;
 
     return { amount, currency, cardLastDigits, merchant, transactionDate };

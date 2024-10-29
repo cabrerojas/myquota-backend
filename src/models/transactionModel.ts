@@ -1,4 +1,6 @@
 import { db } from '../config/firebase';
+import { FieldPath } from 'firebase-admin/firestore';
+import { chunkArray } from '../utils/arrayUtils';
 
 export type Transaction = {
     id?: string;
@@ -12,35 +14,39 @@ export type Transaction = {
     email: string;              // Correo desde el cual se envió el mensaje
 };
 
+export async function getExistingTransactionIds(ids: string[]): Promise<string[]> {
+    const existingIds: string[] = [];
+    const idChunks = chunkArray(ids, 30); // Divide los IDs en lotes de 30
+
+    for (const chunk of idChunks) {
+        const snapshots = await db.collection('transactions')
+            .where(FieldPath.documentId(), 'in', chunk)
+            .get();
+
+        snapshots.forEach(doc => {
+            existingIds.push(doc.id);
+        });
+    }
+
+    return existingIds;
+}
+
 export async function saveBatch(transactions: Array<{ id: string;[key: string]: any }>) {
     const batch = db.batch();
 
-    // Crea una lista de referencias a documentos usando los IDs de los correos
-    const transactionRefs = transactions.map(transaction => db.collection('transactions').doc(transaction.id));
-
-    // Verifica cuáles de esos documentos ya existen en Firestore
-    const existingDocs = await db.getAll(...transactionRefs);
-    const existingIds = existingDocs
-        .filter(doc => doc.exists) // Filtra solo los documentos que existen
-        .map(doc => doc.id);       // Obtiene los IDs de los documentos existentes
-
-    // Filtra las transacciones que aún no existen en la colección
-    const newTransactions = transactions.filter(transaction => !existingIds.includes(transaction.id));
-
-    // Agrega las transacciones nuevas al batch
-    newTransactions.forEach(transaction => {
+    // Agrega todas las transacciones al batch directamente, sin verificar la existencia
+    transactions.forEach(transaction => {
         const transactionRef = db.collection('transactions').doc(transaction.id);
         batch.set(transactionRef, transaction);
     });
 
     try {
         await batch.commit();
-        console.log(`Lote de transacciones guardado exitosamente en Firestore. Total de nuevos registros: ${newTransactions.length}`);
+        console.log(`Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`);
     } catch (error) {
         console.error('Error al guardar el lote de transacciones en Firestore:', error);
     }
 };
-
 
 // Función para guardar una transacción en Firestore solo si no existe el mensaje con el messageId como ID de documento
 export async function createTransaction(transactionData: any, messageId: string) {
