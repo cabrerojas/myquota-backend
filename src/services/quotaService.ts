@@ -42,5 +42,21 @@ export const quotaService = {
         await quotaModel.createQuotaByTransaction(transactionId, quotaData);
         return quotaData;
     },
+    async updateQuotaById(id: string, updatedData: Partial<Quota>) {
+        // Validación de la cuota o lógica adicional si es necesaria
+        if (!id || !updatedData) {
+            throw new Error('ID de cuota y datos actualizados son requeridos.');
+        }
+        return await quotaModel.updateQuota(id, updatedData);
+    },
+    async getAllQuotas(): Promise<Quota[]> {
+        return await quotaModel.getAllQuotas();
+    },
+    async deleteQuotaById(quotaId: string): Promise<void> {
+        await quotaModel.deleteQuotaById(quotaId);
+    },
+
+
+
 
 };

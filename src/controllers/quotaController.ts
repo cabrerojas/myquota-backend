@@ -32,3 +32,36 @@ export const initializeQuota = async (req: Request, res: Response) => {
     }
 };
 
+export const updateQuota = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updatedData = req.body;
+        await quotaService.updateQuotaById(id, updatedData);
+        res.status(200).json({ message: 'Cuota actualizada exitosamente' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error al actualizar la cuota', error });
+    }
+};
+
+export const getAllQuotas = async (req: Request, res: Response) => {
+    try {
+        const quotas = await quotaService.getAllQuotas();
+        res.status(200).json(quotas);
+    } catch (error) {
+        res.status(500).json({ message: 'Error al obtener las cuotas', error });
+    }
+};
+
+export const deleteQuota = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await quotaService.deleteQuotaById(id);
+        res.status(200).json({ message: 'Cuota eliminada correctamente' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error al eliminar la cuota', error });
+    }
+};
+
+
+
+

@@ -37,5 +37,36 @@ export const quotaModel = {
             createdAt: new Date()
         });
     },
+    async updateQuota(id: string, updatedData: Partial<Quota>) {
+        try {
+            const quotaRef = db.collection('quotas').doc(id);
+            await quotaRef.update(updatedData);
+            console.log(`Cuota ${id} actualizada exitosamente.`);
+        } catch (error) {
+            console.error(`Error al actualizar la cuota ${id}:`, error);
+            throw error;
+        }
+    },
+    async getAllQuotas(): Promise<Quota[]> {
+        try {
+            const snapshot = await db.collection('quotas').get();
+            const quotas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Quota[];
+            return quotas;
+        } catch (error) {
+            console.error('Error al obtener todas las cuotas:', error);
+            throw error;
+        }
+    },
+    async deleteQuotaById(quotaId: string): Promise<void> {
+        try {
+            const quotaRef = db.collection('quotas').doc(quotaId);
+            await quotaRef.delete();
+            console.log(`Cuota con ID ${quotaId} eliminada correctamente.`);
+        } catch (error) {
+            console.error('Error al eliminar la cuota:', error);
+            throw error;
+        }
+    },
+
 
 };
