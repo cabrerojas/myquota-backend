@@ -2,12 +2,12 @@ import { db } from "../config/firebase";
 
 export type Quota = {
     id?: string;
-    transactionId: string;
-    amount: number;
-    due_date: string;
-    status: 'pending' | 'paid';
-    currency: string;
-    payment_date?: string;
+    transactionId: string;       // ID de la transacción asociada
+    amount: number;              // Monto de la cuota
+    due_date: string;            // Fecha de vencimiento de la cuota
+    status: 'pending' | 'paid';  // Estado de la cuota
+    currency: string;            // Moneda de la cuota
+    payment_date?: string;       // Fecha de pago de la cuota (opcional)
 };
 
 export const quotaModel = {
@@ -28,5 +28,14 @@ export const quotaModel = {
         const quotaRef = db.collection('quotas').doc(quotaId);
         const updateData = paymentDate ? { status, payment_date: paymentDate } : { status };
         await quotaRef.update(updateData);
-    }
+    },
+    async createQuotaByTransaction(transactionId: string, quotaData: Quota) {
+        const quotaRef = db.collection('quotas').doc();
+        await quotaRef.set({
+            ...quotaData,
+            transactionId,
+            createdAt: new Date()
+        });
+    },
+
 };

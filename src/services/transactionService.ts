@@ -1,17 +1,87 @@
 import { google } from 'googleapis';
 import { authenticate } from '../config/gmailAuth';
-import * as transactionModel from '../models/transactionModel';
-import { Transaction } from '../models/transactionModel';
+import { Transaction, transactionModel } from '../models/transactionModel';
 import * as cheerio from 'cheerio';
 
+export const transactionService = {
+    async getTransactionById(transactionId: string): Promise<Transaction | null> {
+        return await transactionModel.getTransactionById(transactionId);
+    },
+    async addTransaction(data: Transaction) {
+        return await transactionModel.createTransaction(data, 'messageId');
+    },
+    async getAllTransactions() {
+        return await transactionModel.getAllTransactions();
+    },
+    async fetchBankEmails() {
+        const auth = await authenticate();
+        const gmail = google.gmail({ version: 'v1', auth });
 
-export async function addTransaction(data: Transaction) {
-    return await transactionModel.createTransaction(data, 'messageId');
-}
+        // Calcular el primer día del mes actual en formato YYYY/MM/DD
+        const today = new Date();
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const formattedDate = `${startOfMonth.getFullYear()}/${(startOfMonth.getMonth() + 1).toString().padStart(2, '0')}/${startOfMonth.getDate().toString().padStart(2, '0')}`;
 
-export async function getAllTransactions() {
-    return await transactionModel.getAllTransactions();
-}
+        const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
+        const res = await gmail.users.messages.list({ userId: 'me', q: query });
+
+        if (res.data.messages) {
+
+            const messageIds = res.data.messages.map(message => message.id!);
+
+            // Filtrar los messageIds que ya existen en Firestore
+            const existingIds = await transactionModel.getExistingTransactionIds(messageIds);
+            const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
+
+            console.log(`Procesando ${newMessageIds.length} nuevos correos`);
+
+            let batchData = [];
+
+            for (const [index, messageId] of newMessageIds.entries()) {
+
+                const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
+                let encodedMessage = email.data.payload?.body?.data;
+
+                if (email.data.payload) {
+                    encodedMessage = findHtmlOrPlainText(email.data.payload);
+                }
+
+                if (encodedMessage) {
+                    const content = Buffer.from(encodedMessage, 'base64').toString('utf8');
+                    const { amount, currency, cardLastDigits, merchant, transactionDate } = extractTransactionDataFromHtml(content);
+
+                    if (amount && cardLastDigits && merchant && transactionDate) {
+                        const transactionData = {
+                            id: messageId,
+                            amount,
+                            currency,
+                            card_type: 'Tarjeta de Crédito',
+                            card_last_digits: cardLastDigits,
+                            merchant,
+                            transaction_date: transactionDate,
+                            bank: 'Banco de Chile',
+                            email: 'enviodigital@bancochile.cl'
+                        };
+
+                        batchData.push(transactionData);
+
+                        // Cada vez que acumulamos 5 transacciones, las guardamos en Firestore
+                        if ((index + 1) % 5 === 0 || index + 1 === res.data.messages.length) {
+                            await transactionModel.saveBatch(batchData);
+                            console.log('Batch de 5 transacciones guardado.');
+                            batchData = [];
+                        }
+                    }
+                }
+            }
+        } else {
+            console.log('No se encontraron correos de transacciones para este mes.');
+        }
+    },
+
+    // ... otras funciones del servicio
+};
+
 
 // Función recursiva para buscar contenido HTML o texto plano en partes anidadas
 export function findHtmlOrPlainText(part: any): string | undefined {
@@ -29,71 +99,6 @@ export function findHtmlOrPlainText(part: any): string | undefined {
     return undefined;
 }
 
-export async function fetchBankEmails() {
-    const auth = await authenticate();
-    const gmail = google.gmail({ version: 'v1', auth });
-
-    // Calcular el primer día del mes actual en formato YYYY/MM/DD
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const formattedDate = `${startOfMonth.getFullYear()}/${(startOfMonth.getMonth() + 1).toString().padStart(2, '0')}/${startOfMonth.getDate().toString().padStart(2, '0')}`;
-
-    const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
-    const res = await gmail.users.messages.list({ userId: 'me', q: query });
-
-    if (res.data.messages) {
-
-        const messageIds = res.data.messages.map(message => message.id!);
-
-        // Filtrar los messageIds que ya existen en Firestore
-        const existingIds = await transactionModel.getExistingTransactionIds(messageIds);
-        const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
-
-        console.log(`Procesando ${newMessageIds.length} nuevos correos`);
-
-        let batchData = [];
-
-        for (const [index, messageId] of newMessageIds.entries()) {
-
-            const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
-            let encodedMessage = email.data.payload?.body?.data;
-
-            if (email.data.payload) {
-                encodedMessage = findHtmlOrPlainText(email.data.payload);
-            }
-
-            if (encodedMessage) {
-                const content = Buffer.from(encodedMessage, 'base64').toString('utf8');
-                const { amount, currency, cardLastDigits, merchant, transactionDate } = extractTransactionDataFromHtml(content);
-
-                if (amount && cardLastDigits && merchant && transactionDate) {
-                    const transactionData = {
-                        id: messageId,
-                        amount,
-                        currency,
-                        card_type: 'Tarjeta de Crédito',
-                        card_last_digits: cardLastDigits,
-                        merchant,
-                        transaction_date: transactionDate,
-                        bank: 'Banco de Chile',
-                        email: 'enviodigital@bancochile.cl'
-                    };
-
-                    batchData.push(transactionData);
-
-                    // Cada vez que acumulamos 5 transacciones, las guardamos en Firestore
-                    if ((index + 1) % 5 === 0 || index + 1 === res.data.messages.length) {
-                        await transactionModel.saveBatch(batchData);
-                        console.log('Batch de 5 transacciones guardado.');
-                        batchData = [];
-                    }
-                }
-            }
-        }
-    } else {
-        console.log('No se encontraron correos de transacciones para este mes.');
-    }
-}
 // Función para analizar contenido HTML y extraer la información
 export function extractTransactionDataFromHtml(htmlContent: string) {
     const $ = cheerio.load(htmlContent);

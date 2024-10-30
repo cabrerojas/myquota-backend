@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import * as transactionService from '../services/transactionService';
+import { transactionService } from '../services/transactionService';
 
-export async function addTransaction(req: Request, res: Response) {
+
+const addTransaction = async (req: Request, res: Response) => {
     try {
 
         console.log(req.body);
@@ -12,7 +13,7 @@ export async function addTransaction(req: Request, res: Response) {
     }
 }
 
-export async function getTransactions(req: Request, res: Response) {
+const getTransactions = async (req: Request, res: Response) => {
     try {
         const transactions = await transactionService.getAllTransactions();
         res.status(200).json(transactions);
@@ -21,11 +22,25 @@ export async function getTransactions(req: Request, res: Response) {
     }
 }
 
-export async function importBankTransactions(req: Request, res: Response) {
+const getTransaction = async (req: Request, res: Response) => {
+    try {
+        const { transactionId } = req.params;
+        const transaction = await transactionService.getTransactionById(transactionId);
+        if (!transaction) res.status(404).json({ message: 'Transacción no encontrada' });
+        else res.status(200).json(transaction);
+    } catch (error) {
+        res.status(500).json({ message: 'Error al obtener la transacción', error });
+    }
+};
+
+const importBankTransactions = async (req: Request, res: Response) => {
     try {
         await transactionService.fetchBankEmails();
         res.status(200).json({ message: 'Transacciones importadas exitosamente' });
     } catch (error) {
         res.status(500).json({ message: 'Error al importar transacciones', error });
     }
-}
+};
+
+
+export { getTransaction, importBankTransactions, addTransaction, getTransactions };

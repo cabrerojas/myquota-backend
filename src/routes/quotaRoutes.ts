@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import { quotaController } from '../controllers/quotaController';
+import { createQuotas, getQuotas, initializeQuota, markQuotaAsPaid } from '../controllers/quotaController';
 
 const router = Router();
 
-router.post('/quotas', quotaController.createQuotas);
-router.get('/quotas/:transactionId', quotaController.getQuotas);
-router.patch('/quotas/:quotaId/pay', quotaController.markQuotaAsPaid);
+router.post('/quotas', createQuotas);
+router.get('/quotas/:transactionId', getQuotas);
+router.patch('/quotas/:quotaId/pay', markQuotaAsPaid);
+router.post('/quotas/initialize-by-transaction/:transactionId', initializeQuota);
+
+
 
 export default router;
