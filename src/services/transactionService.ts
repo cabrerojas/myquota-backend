@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { gmail_v1, google } from 'googleapis';
 import { authenticate } from '../config/gmailAuth';
 import { Transaction, transactionModel } from '../models/transactionModel';
 import * as cheerio from 'cheerio';
@@ -35,7 +35,7 @@ export const transactionService = {
 
             console.log(`Procesando ${newMessageIds.length} nuevos correos`);
 
-            let batchData = [];
+            let batchData: Transaction[] = [];
 
             for (const [index, messageId] of newMessageIds.entries()) {
 
@@ -51,7 +51,7 @@ export const transactionService = {
                     const { amount, currency, cardLastDigits, merchant, transactionDate } = extractTransactionDataFromHtml(content);
 
                     if (amount && cardLastDigits && merchant && transactionDate) {
-                        const transactionData = {
+                        const transactionData: Transaction = {
                             id: messageId,
                             amount,
                             currency,
@@ -84,7 +84,7 @@ export const transactionService = {
 
 
 // Función recursiva para buscar contenido HTML o texto plano en partes anidadas
-export function findHtmlOrPlainText(part: any): string | undefined {
+export function findHtmlOrPlainText(part: gmail_v1.Schema$MessagePart): string | null | undefined {
     // Busca contenido HTML o texto plano directamente
     if (part.mimeType === "text/html" || part.mimeType === "text/plain") {
         return part.body?.data;

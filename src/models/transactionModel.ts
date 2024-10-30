@@ -55,12 +55,12 @@ export const transactionModel = {
 
         return existingIds;
     },
-    async saveBatch(transactions: Array<{ id: string;[key: string]: any }>) {
+    async saveBatch(transactions: Transaction[]) {
         const batch = db.batch();
 
         // Agrega todas las transacciones al batch directamente, sin verificar la existencia
         transactions.forEach(transaction => {
-            const transactionRef = db.collection('transactions').doc(transaction.id);
+            const transactionRef = db.collection('transactions').doc(transaction.id!);
             batch.set(transactionRef, transaction);
         });
 
@@ -71,7 +71,7 @@ export const transactionModel = {
             console.error('Error al guardar el lote de transacciones en Firestore:', error);
         }
     },
-    async createTransaction(transactionData: any, messageId: string) {
+    async createTransaction(transactionData: Transaction, messageId: string) {
         try {
             // Crea una referencia al documento usando el messageId
             const transactionRef = db.collection('transactions').doc(messageId);

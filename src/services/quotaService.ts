@@ -35,7 +35,7 @@ export const quotaService = {
             transactionId: transactionId,
             amount: transaction.amount,
             due_date: new Date().toISOString(),  // Fecha estimada de vencimiento
-            status: 'pending' as 'pending',
+            status: 'pending' as const,
             currency: transaction.currency
         };
 
