@@ -60,6 +60,7 @@ proyecto-bancario/
 - **GET /api/transactions/:id**: Obtener una transacción específica por ID.
 - **PUT /api/transactions/:id**: Actualizar una transacción existente por ID.
 - **DELETE /api/transactions/:id**: Eliminar una transacción por ID.
+- **POST /api/transactions/import-bank-transactions**: Trae las transacciones enviadas al correo del mes.
 
 ### Cuotas
 
@@ -68,6 +69,8 @@ proyecto-bancario/
 - **GET /api/quotas/:id**: Obtener una cuota específica por ID.
 - **PUT /api/quotas/:id**: Actualizar una cuota existente por ID.
 - **DELETE /api/quotas/:id**: Eliminar una cuota por ID.
+- **POST /api/quotas/initialize-by-transaction/:transactionId**: Genera cuota a partir de transacción.
+- **PATCH /api/quotas/:quotaId/pay**: Marca cuota como pagada.
 
 ## Scripts Disponibles
 
