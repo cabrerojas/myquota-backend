@@ -78,6 +78,16 @@ export const transactionService = {
             console.log('No se encontraron correos de transacciones para este mes.');
         }
     },
+    async updateTransactionById(id: string, updatedData: Partial<Transaction>) {
+        // Aquí puedes añadir validaciones o lógica adicional
+        if (!id || !updatedData) {
+            throw new Error('ID de transacción y datos actualizados son requeridos.');
+        }
+        return await transactionModel.updateTransaction(id, updatedData);
+    },
+    async deleteTransactionById(transactionId: string): Promise<void> {
+        await transactionModel.deleteTransactionById(transactionId);
+    },
 
     // ... otras funciones del servicio
 };

@@ -94,6 +94,28 @@ export const transactionModel = {
         const snapshot = await db.collection('transactions').get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
     },
+    async updateTransaction(id: string, updatedData: Partial<Transaction>) {
+        try {
+            const transactionRef = db.collection('transactions').doc(id);
+            await transactionRef.update(updatedData);
+            console.log(`Transacción ${id} actualizada exitosamente.`);
+        } catch (error) {
+            console.error(`Error al actualizar la transacción ${id}:`, error);
+            throw error;
+        }
+    },
+    async deleteTransactionById(transactionId: string): Promise<void> {
+        try {
+            const transactionRef = db.collection('transactions').doc(transactionId);
+            await transactionRef.delete();
+            console.log(`Transacción con ID ${transactionId} eliminada correctamente.`);
+        } catch (error) {
+            console.error('Error al eliminar la transacción:', error);
+            throw error;
+        }
+    },
+
+
     // ... otras funciones del modelo
 };
 

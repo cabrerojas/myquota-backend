@@ -42,5 +42,26 @@ const importBankTransactions = async (req: Request, res: Response) => {
     }
 };
 
+const updateTransaction = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updatedData = req.body;
+        await transactionService.updateTransactionById(id, updatedData);
+        res.status(200).json({ message: 'Transacción actualizada exitosamente' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error al actualizar la transacción', error });
+    }
+};
 
-export { getTransaction, importBankTransactions, addTransaction, getTransactions };
+export const deleteTransaction = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await transactionService.deleteTransactionById(id);
+        res.status(200).json({ message: 'Transacción eliminada correctamente' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error al eliminar la transacción', error });
+    }
+};
+
+
+export { getTransaction, importBankTransactions, addTransaction, getTransactions, updateTransaction };
