@@ -39,19 +39,44 @@ myquota-backend/
 
 ## Configuración
 
-1. **Archivo `.env`**: Crea un archivo `.env` en el directorio raíz y agrega las siguientes variables de entorno:
+1. **Instalar Dependencias**:
+   ```bash
+   npm install
+   ```
+
+2. **Archivo `.env`**: Crea un archivo `.env` en el directorio raíz y agrega las siguientes variables de entorno:
 
    ```plaintext
    FIREBASE_DB_URL=URL_de_tu_base_de_datos_firebase
    PORT=3000
    ```
 
-2. **Credenciales de Firebase**: Coloca el archivo `serviceAccountKey.json` en el directorio `src/config` para la autenticación de Firebase. Este archivo contiene las credenciales necesarias para que el backend se conecte a Firestore.
+3. **Credenciales de Firebase**: Coloca el archivo `serviceAccountKey.json` en el directorio `src/config` para la autenticación de Firebase. Este archivo contiene las credenciales necesarias para que el backend se conecte a Firestore.
 
-3. **Ejecución en Desarrollo**: Usa el siguiente comando para ejecutar el proyecto en modo de desarrollo:
+4. **Credenciales de API gmail**: Coloca el archivo `credentials.json` en el directorio `src/config` para la autenticación de API Gmail. Este archivo contiene las credenciales necesarias para que el backend se conecte a los correos.
+
+
+5. **Ejecución en Desarrollo**: Usa el siguiente comando para ejecutar el proyecto en modo de desarrollo:
    ```bash
    npm run dev
    ```
+
+# Configuración de Archivos de Credenciales
+
+## 1. Obtener el archivo `serviceAccountKey.json` de Firebase
+
+   1. Dirígete a la [Consola de Firebase](https://console.firebase.google.com/).
+   2. Ve a **Configuración del Proyecto** (ícono de engranaje) y selecciona **Cuentas de servicio**.
+   3. Selecciona **Generar nueva clave privada**, confirma, y descarga el archivo JSON con las credenciales.
+   4. Guarda este archivo como `serviceAccountKey.json` y colócalo en el directorio `src/config` de tu proyecto.
+
+## 2. Configurar las credenciales de Gmail (`credentials.json`)
+
+   1. Ingresa a [Google Cloud Console](https://console.cloud.google.com/) y crea un proyecto o selecciona uno existente.
+   2. Activa la **API de Gmail** en la sección de **API y Servicios**.
+   3. Ve a **Credenciales** y selecciona **Crear credenciales**.
+   4. Elige "ID de cliente de OAuth 2.0" o "Cuenta de servicio" y sigue los pasos para configurarlo.
+   5. Descarga el archivo JSON, que será tu `credentials.json`, y colócalo en el directorio `src/config` de tu proyecto.
 
 ## Endpoints
 
