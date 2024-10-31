@@ -22,17 +22,19 @@ myquota-backend/
 │   │   │   ├── quota.service.ts                # Servicios para cuotas
 │   │   │   └── quota.validators.ts             # Validadores específicos para cuotas
 │   ├── config/
-│   │   └── firebase.ts                         # Configuración de Firebase y base de datos
+│   │   ├── firebase.ts                         # Configuración de Firebase y base de datos
+│   │   └── gmailAuth.ts                        # Configuración de API gmail.
 │   ├── middlewares/
 │   │   └── errorHandler.ts                     # Middleware para manejo de errores
 │   ├── utils/
-│   │   └── helpers.ts                          # Utilidades comunes
+│   │   └── *.ts                                # Utilidades comunes
 │   └── index.ts                                # Punto de entrada de la aplicación
 ├── .env                                        # Variables de entorno
 ├── .gitignore                                  # Archivos a ignorar en Git
+├── eslint.config.mjs                           # Configuraciones de ESlint
 ├── tsconfig.json                               # Configuración de TypeScript
 ├── package.json                                # Dependencias del proyecto
-└── README.md                                   # Documentación del proyecto             
+└── README.md                                   # Documentación del proyecto      
 ```
 
 ## Configuración
@@ -76,10 +78,12 @@ myquota-backend/
 
 - **`npm run dev`**: Inicia el servidor en modo de desarrollo.
 - **`npm run build`**: Compila el proyecto TypeScript.
+- **`npm run lint`**: Inicia ESlint.
 - **`npm start`**: Inicia el servidor usando el código compilado.
 
 ## Dependencias Principales
 
 - **firebase-admin**: SDK de Firebase para acceso a Firestore y autenticación.
+- **fireorm**: ORM para firestore.
 - **express**: Framework para construir la API REST.
 - **typescript**: Superconjunto de JavaScript que añade tipado estático.
