@@ -1,6 +1,7 @@
-import { quotaModel } from '../models/quotaModel';
-import { Quota } from '../models/quotaModel';
-import { transactionModel } from '../models/transactionModel';
+import { transactionModel } from "../transaction/transaction.model";
+import { Quota, quotaModel } from "./quota.model";
+
+
 
 export const quotaService = {
     async createQuotasForTransaction(transactionId: string, amount: number, numQuotas: number, dueDates: string[], currency: string) {

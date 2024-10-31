@@ -1,6 +1,7 @@
-import { db } from '../config/firebase';
+
 import { FieldPath } from 'firebase-admin/firestore';
-import { chunkArray } from '../utils/arrayUtils';
+import { db } from '../../config/firebase';
+import { chunkArray } from '../../utils/arrayUtils';
 
 export type Transaction = {
     id?: string;

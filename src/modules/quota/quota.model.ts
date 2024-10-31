@@ -1,4 +1,4 @@
-import { db } from "../config/firebase";
+import { db } from "../../config/firebase";
 
 export type Quota = {
     id?: string;

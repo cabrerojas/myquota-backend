@@ -1,7 +1,7 @@
 import { gmail_v1, google } from 'googleapis';
-import { authenticate } from '../config/gmailAuth';
-import { Transaction, transactionModel } from '../models/transactionModel';
+import { authenticate } from '../../config/gmailAuth';
 import * as cheerio from 'cheerio';
+import { Transaction, transactionModel } from './transaction.model';
 
 export const transactionService = {
     async getTransactionById(transactionId: string): Promise<Transaction | null> {

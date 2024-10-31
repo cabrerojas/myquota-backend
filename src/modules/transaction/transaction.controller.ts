@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { transactionService } from '../services/transactionService';
+import { transactionService } from './transaction.service';
 
 
 const addTransaction = async (req: Request, res: Response) => {

@@ -1,15 +1,15 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import transactionRoutes from './routes/transactionRoutes';
-import quotaRoutes from './routes/quotaRoutes';
-
+import transactionRouter from './modules/transaction/transaction.routes';
+import quotaRoutes from './modules/quota/quota.routes';
 import { errorHandler } from './middlewares/errorHandler';
+
 
 dotenv.config();
 const app = express();
 
 app.use(express.json());
-app.use('/api', transactionRoutes);
+app.use('/api', transactionRouter);
 app.use('/api', quotaRoutes);
 
 

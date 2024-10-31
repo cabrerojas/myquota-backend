@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { quotaService } from '../services/quotaService';
+import { quotaService } from './quota.service';
 
 export const createQuotas = async (req: Request, res: Response) => {
     const { transactionId, amount, numQuotas, dueDates, currency } = req.body;

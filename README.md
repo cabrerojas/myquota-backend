@@ -3,36 +3,36 @@
 
 Aplicación backend para manejar y visualizar transacciones financieras, incluyendo soporte para cuotas de transacciones.
 
-## Estructura del Proyecto
+## Estructura del Proyecto "feature-based" o "modular-based" 
 
 ```
-proyecto-bancario/ 
-├── src/ 
-│ ├── config/ 
-│ │ └── firebase.ts # Configuración de la base de datos
-│ ├── controllers/
-│ │ ├── transactionController.ts # Lógica de controladores para manejar transacciones 
-│ │ └── quotaController.ts # Lógica de controladores para manejar cuotas 
-│ ├── middlewares/
-│ │ └── errorHandler.ts # Middleware para manejar errores 
-│ ├── models/ 
-│ │ ├── transactionModel.ts # Definición de modelos de datos (Transacciones) 
-│ │ └── quotaModel.ts # Definición de modelos de datos (Cuotas) 
-│ ├── routes/ 
-│ │ ├── transactionRoutes.ts # Rutas para las transacciones 
-│ │ └── quotaRoutes.ts # Rutas para las cuotas 
-│ ├── services/ 
-│ │ ├── transactionService.ts # Lógica de negocio para transacciones 
-│ │ └── quotaService.ts # Lógica de negocio para cuotas 
-│ ├── utils/ 
-│ │ ├── validators.ts # Utilidades y validaciones de datos 
-│ │ └── helpers.ts # Funciones auxiliares para operaciones comunes 
-│ ├── index.ts # Punto de entrada de la aplicación 
-├── .env # Variables de entorno 
-├── .gitignore # Archivos a ignorar en Git 
-├── tsconfig.json # Configuración de TypeScript 
-├── package.json # Dependencias del proyecto 
-└── README.md # Documentación del proyecto               
+myquota-backend/
+├── src/
+│   ├── modules/
+│   │   ├── transactions/
+│   │   │   ├── transaction.controller.ts       # Controlador para transacciones
+│   │   │   ├── transaction.model.ts            # Modelo de datos para transacciones
+│   │   │   ├── transaction.routes.ts           # Rutas de transacciones
+│   │   │   ├── transaction.service.ts          # Servicios para transacciones
+│   │   │   └── transaction.validators.ts       # Validadores específicos para transacciones
+│   │   ├── quotas/
+│   │   │   ├── quota.controller.ts             # Controlador para cuotas
+│   │   │   ├── quota.model.ts                  # Modelo de datos para cuotas
+│   │   │   ├── quota.routes.ts                 # Rutas de cuotas
+│   │   │   ├── quota.service.ts                # Servicios para cuotas
+│   │   │   └── quota.validators.ts             # Validadores específicos para cuotas
+│   ├── config/
+│   │   └── firebase.ts                         # Configuración de Firebase y base de datos
+│   ├── middlewares/
+│   │   └── errorHandler.ts                     # Middleware para manejo de errores
+│   ├── utils/
+│   │   └── helpers.ts                          # Utilidades comunes
+│   └── index.ts                                # Punto de entrada de la aplicación
+├── .env                                        # Variables de entorno
+├── .gitignore                                  # Archivos a ignorar en Git
+├── tsconfig.json                               # Configuración de TypeScript
+├── package.json                                # Dependencias del proyecto
+└── README.md                                   # Documentación del proyecto             
 ```
 
 ## Configuración
