@@ -1,3 +1,4 @@
+import './config/firebase'; // Esto inicializa Firebase y fireorm
 import express from 'express';
 import dotenv from 'dotenv';
 import transactionRouter from './modules/transaction/transaction.routes';

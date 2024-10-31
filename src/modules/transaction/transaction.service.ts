@@ -2,6 +2,8 @@ import { gmail_v1, google } from 'googleapis';
 import { authenticate } from '../../config/gmailAuth';
 import * as cheerio from 'cheerio';
 import { Transaction, transactionModel } from './transaction.model';
+import { chunkArray } from '../../utils/array.utils';
+import { parseFirebaseDate } from '../../utils/date.utils';
 
 export const transactionService = {
     async getTransactionById(transactionId: string): Promise<Transaction | null> {
@@ -22,6 +24,7 @@ export const transactionService = {
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const formattedDate = `${startOfMonth.getFullYear()}/${(startOfMonth.getMonth() + 1).toString().padStart(2, '0')}/${startOfMonth.getDate().toString().padStart(2, '0')}`;
 
+        console.log(`Buscando correos de transacciones desde ${formattedDate}`);
         const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
         const res = await gmail.users.messages.list({ userId: 'me', q: query });
 
@@ -33,45 +36,55 @@ export const transactionService = {
             const existingIds = await transactionModel.getExistingTransactionIds(messageIds);
             const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
 
+            console.log(` ${newMessageIds} `);
+            if (newMessageIds.length === 0) {
+                console.log('No hay nuevos correos para procesar.');
+                return;
+            }
             console.log(`Procesando ${newMessageIds.length} nuevos correos`);
 
+            const chunks = chunkArray(newMessageIds, 100);
             let batchData: Transaction[] = [];
 
-            for (const [index, messageId] of newMessageIds.entries()) {
+            // Procesar cada chunk de forma paralela
+            for (const chunk of chunks) {
+                await Promise.all(
+                    chunk.map(async (messageId, index) => {
+                        const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
+                        let encodedMessage = email.data.payload?.body?.data;
+                        console.log(`Procesando correo ${index + 1} de ${chunk.length}`);
 
-                const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
-                let encodedMessage = email.data.payload?.body?.data;
-
-                if (email.data.payload) {
-                    encodedMessage = findHtmlOrPlainText(email.data.payload);
-                }
-
-                if (encodedMessage) {
-                    const content = Buffer.from(encodedMessage, 'base64').toString('utf8');
-                    const { amount, currency, cardLastDigits, merchant, transactionDate } = extractTransactionDataFromHtml(content);
-
-                    if (amount && cardLastDigits && merchant && transactionDate) {
-                        const transactionData: Transaction = {
-                            id: messageId,
-                            amount,
-                            currency,
-                            card_type: 'Tarjeta de Crédito',
-                            card_last_digits: cardLastDigits,
-                            merchant,
-                            transaction_date: transactionDate,
-                            bank: 'Banco de Chile',
-                            email: 'enviodigital@bancochile.cl'
-                        };
-
-                        batchData.push(transactionData);
-
-                        // Cada vez que acumulamos 5 transacciones, las guardamos en Firestore
-                        if ((index + 1) % 5 === 0 || index + 1 === res.data.messages.length) {
-                            await transactionModel.saveBatch(batchData);
-                            console.log('Batch de 5 transacciones guardado.');
-                            batchData = [];
+                        if (email.data.payload) {
+                            encodedMessage = findHtmlOrPlainText(email.data.payload);
                         }
-                    }
+
+                        if (encodedMessage) {
+                            const content = Buffer.from(encodedMessage, 'base64').toString('utf8');
+                            const { amount, currency, cardLastDigits, merchant, transactionDate } = extractTransactionDataFromHtml(content);
+
+                            if (amount && cardLastDigits && merchant && transactionDate) {
+                                const transactionData: Transaction = {
+                                    id: messageId,
+                                    amount,
+                                    currency,
+                                    card_type: 'Tarjeta de Crédito',
+                                    cardLast_digits: cardLastDigits,
+                                    merchant,
+                                    transaction_date: transactionDate,
+                                    bank: 'Banco de Chile',
+                                    email: 'enviodigital@bancochile.cl'
+                                };
+
+                                batchData.push(transactionData);
+                            }
+                        }
+                    })
+                );
+
+                // Guardar el lote en Firestore después de procesar cada chunk de 5
+                if (batchData.length > 0) {
+                    await transactionModel.saveBatch(batchData);
+                    batchData = []; // Limpiar el batchData después de cada guardado
                 }
             }
         } else {
@@ -135,7 +148,9 @@ export function extractTransactionDataFromHtml(htmlContent: string) {
     // Formatear otros datos extraídos
     const cardLastDigits = lastDigitsMatch ? lastDigitsMatch[1] : null;
     const merchant = merchantMatch ? merchantMatch[1].replace(/\s+/g, ' ').trim() : null;
-    const transactionDate = dateMatch ? dateMatch[0] : null;
+    // Convertir transactionDate a un objeto Date si se extrajo correctamente
+    const transactionDate = dateMatch ? parseFirebaseDate(dateMatch[0]) : null;
+
 
     return { amount, currency, cardLastDigits, merchant, transactionDate };
 }

@@ -4,10 +4,11 @@ import { Quota, quotaModel } from "./quota.model";
 
 
 export const quotaService = {
-    async createQuotasForTransaction(transactionId: string, amount: number, numQuotas: number, dueDates: string[], currency: string) {
+    async createQuotasForTransaction(transactionId: string, amount: number, numQuotas: number, dueDates: Date[], currency: string) {
         const quotaAmount = amount / numQuotas;
 
-        const quotas: Quota[] = dueDates.map(dueDate => ({
+        const quotas: Quota[] = dueDates.map((dueDate, index) => ({
+            id: `${transactionId}-${index}`, // Generate a unique id for each quota
             transactionId,
             amount: quotaAmount,
             due_date: dueDate,
@@ -22,7 +23,7 @@ export const quotaService = {
     async getQuotasByTransaction(transactionId: string) {
         return await quotaModel.getQuotasByTransactionId(transactionId);
     },
-    async markQuotaAsPaid(quotaId: string, paymentDate: string) {
+    async markQuotaAsPaid(quotaId: string, paymentDate: Date) {
         await quotaModel.updateQuotaStatus(quotaId, 'paid', paymentDate);
     },
     async initializeQuota(transactionId: string) {
@@ -35,7 +36,7 @@ export const quotaService = {
         const quotaData = {
             transactionId: transactionId,
             amount: transaction.amount,
-            due_date: new Date().toISOString(),  // Fecha estimada de vencimiento
+            due_date: new Date(),  // Fecha estimada de vencimiento
             status: 'pending' as const,
             currency: transaction.currency
         };

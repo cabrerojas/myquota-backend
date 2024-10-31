@@ -1,47 +1,61 @@
-import { db } from "../../config/firebase";
 
-export type Quota = {
-    id?: string;
-    transactionId: string;       // ID de la transacción asociada
-    amount: number;              // Monto de la cuota
-    due_date: string;            // Fecha de vencimiento de la cuota
-    status: 'pending' | 'paid';  // Estado de la cuota
-    currency: string;            // Moneda de la cuota
-    payment_date?: string;       // Fecha de pago de la cuota (opcional)
-};
+import { Collection, getRepository } from 'fireorm';
+
+@Collection('quotas')
+export class Quota {
+    id!: string; // Fireorm requiere un ID explícito
+    transactionId!: string;       // ID de la transacción asociada
+    amount!: number;              // Monto de la cuota
+    due_date!: Date | Date[];            // Fecha de vencimiento de la cuota
+    status!: 'pending' | 'paid';  // Estado de la cuota
+    currency!: string;            // Moneda de la cuota
+    payment_date?: Date;        // Fecha de pago de la cuota (opcional)
+    createdAt?: Date;             // Fecha de creación
+    isDeleted?: boolean;          // Soft delete flag
+
+}
+
+// Obtener el repositorio para Quota
+const quotaRepository = getRepository(Quota);
 
 export const quotaModel = {
-    async createQuota(quotaData: Quota) {
-        const quotaRef = db.collection('quotas').doc();
-        await quotaRef.set(quotaData);
-        return quotaRef.id;
+    async createQuota(quotaData: Omit<Quota, 'id'>) {
+        const quota = await quotaRepository.create({ ...quotaData, createdAt: new Date(), isDeleted: false });
+        return quota.id;
     },
 
     async getQuotasByTransactionId(transactionId: string) {
-        const quotasSnapshot = await db.collection('quotas')
-            .where('transactionId', '==', transactionId)
-            .get();
-        return quotasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const quotas = await quotaRepository
+            .whereEqualTo('transactionId', transactionId)
+            .whereEqualTo('isDeleted', false) // Filtrar por cuotas que no están eliminadas
+            .find();
+        return quotas;
     },
 
-    async updateQuotaStatus(quotaId: string, status: 'pending' | 'paid', paymentDate?: string) {
-        const quotaRef = db.collection('quotas').doc(quotaId);
-        const updateData = paymentDate ? { status, payment_date: paymentDate } : { status };
-        await quotaRef.update(updateData);
+    async updateQuotaStatus(quotaId: string, status: 'pending' | 'paid', paymentDate?: Date) {
+        const quota = await quotaRepository.findById(quotaId);
+        if (quota && !quota.isDeleted) {
+            quota.status = status;
+            if (paymentDate) quota.payment_date = paymentDate;
+            await quotaRepository.update(quota);
+        }
     },
-    async createQuotaByTransaction(transactionId: string, quotaData: Quota) {
-        const quotaRef = db.collection('quotas').doc();
-        await quotaRef.set({
+    async createQuotaByTransaction(transactionId: string, quotaData: Omit<Quota, 'id' | 'transactionId' | 'createdAt'>) {
+        await quotaRepository.create({
             ...quotaData,
             transactionId,
-            createdAt: new Date()
+            createdAt: new Date(),
+            isDeleted: false
         });
     },
-    async updateQuota(id: string, updatedData: Partial<Quota>) {
+    async updateQuota(id: string, updatedData: Partial<Omit<Quota, 'id'>>) {
         try {
-            const quotaRef = db.collection('quotas').doc(id);
-            await quotaRef.update(updatedData);
-            console.log(`Cuota ${id} actualizada exitosamente.`);
+            const quota = await quotaRepository.findById(id);
+            if (quota && !quota.isDeleted) {
+                Object.assign(quota, updatedData);
+                await quotaRepository.update(quota);
+                console.log(`Cuota ${id} actualizada exitosamente.`);
+            }
         } catch (error) {
             console.error(`Error al actualizar la cuota ${id}:`, error);
             throw error;
@@ -49,8 +63,7 @@ export const quotaModel = {
     },
     async getAllQuotas(): Promise<Quota[]> {
         try {
-            const snapshot = await db.collection('quotas').get();
-            const quotas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Quota[];
+            const quotas = await quotaRepository.whereEqualTo('isDeleted', false).find();
             return quotas;
         } catch (error) {
             console.error('Error al obtener todas las cuotas:', error);
@@ -59,9 +72,12 @@ export const quotaModel = {
     },
     async deleteQuotaById(quotaId: string): Promise<void> {
         try {
-            const quotaRef = db.collection('quotas').doc(quotaId);
-            await quotaRef.delete();
-            console.log(`Cuota con ID ${quotaId} eliminada correctamente.`);
+            const quota = await quotaRepository.findById(quotaId);
+            if (quota) {
+                quota.isDeleted = true;
+                await quotaRepository.update(quota);
+                console.log(`Cuota con ID ${quotaId} marcada como eliminada (soft delete).`);
+            }
         } catch (error) {
             console.error('Error al eliminar la cuota:', error);
             throw error;

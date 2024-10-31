@@ -1,122 +1,109 @@
+import { Collection, getRepository } from 'fireorm';
+import { chunkArray } from '../../utils/array.utils';
+@Collection('transactions')
+export class Transaction {
+    id!: string; // Fireorm requiere un ID explícito
+    amount!: number;        // Monto de la transacción
+    currency!: string;     // Moneda de la transacción
+    card_type!: string;      // Tipo de tarjeta, por ejemplo, "Tarjeta de Crédito"
+    cardLast_digits!: string; // Últimos cuatro dígitos de la tarjeta utilizada
+    merchant!: string;     // Nombre del comercio donde se realizó la transacción
+    transaction_date!: Date;  // Fecha y hora de la transacción
+    bank!: string;         // Nombre del banco emisor
+    email!: string;       // Correo desde el cual se envió el mensaje
+    isDeleted?: boolean = false; // Soft delete flag, por defecto false
+}
 
-import { FieldPath } from 'firebase-admin/firestore';
-import { db } from '../../config/firebase';
-import { chunkArray } from '../../utils/arrayUtils';
 
-export type Transaction = {
-    id?: string;
-    amount: number;            // Monto de la transacción
-    currency: string;
-    card_type: string;          // Tipo de tarjeta, por ejemplo, "Tarjeta de Crédito"
-    card_last_digits: string;   // Últimos cuatro dígitos de la tarjeta utilizada
-    merchant: string;           // Nombre del comercio donde se realizó la transacción
-    transaction_date: string;   // Fecha y hora de la transacción
-    bank: string;               // Nombre del banco emisor
-    email: string;              // Correo desde el cual se envió el mensaje
-};
-
+const transactionRepository = getRepository(Transaction);
 
 export const transactionModel = {
+    // Obtener todas las transacciones ordenadas por fecha, sin las eliminadas
+    async getAllTransactions() {
+        return await transactionRepository
+            .whereEqualTo('isDeleted', false)
+            .orderByDescending('transaction_date')
+            .find();
+    },
+    // Obtener una transacción por su ID, si no está eliminada
     async getTransactionById(transactionId: string): Promise<Transaction | null> {
         try {
-            const transactionRef = db.collection('transactions').doc(transactionId);
-            const doc = await transactionRef.get();
-
-            if (!doc.exists) {
-                console.log(`Transacción con ID ${transactionId} no encontrada.`);
-                return null;
-            }
-
-            // Valida el contenido del documento para evitar errores de tipo
-            const transactionData = doc.data();
-            if (!transactionData) {
-                console.log(`El documento con ID ${transactionId} no contiene datos válidos.`);
-                return null;
-            }
-
-            return transactionData as Transaction;
+            const transaction = await transactionRepository.findById(transactionId);
+            return transaction.isDeleted ? null : transaction;
         } catch (error) {
             console.error(`Error al obtener la transacción con ID ${transactionId}:`, error);
-            throw new Error(`No se pudo obtener la transacción con ID ${transactionId}`);
+            return null;
         }
     },
+    // Obtener IDs de transacciones existentes en Firestore
     async getExistingTransactionIds(ids: string[]): Promise<string[]> {
-        const existingIds: string[] = [];
-        const idChunks = chunkArray(ids, 30); // Divide los IDs en lotes de 30
-
-        for (const chunk of idChunks) {
-            const snapshots = await db.collection('transactions')
-                .where(FieldPath.documentId(), 'in', chunk)
-                .get();
-
-            snapshots.forEach(doc => {
-                existingIds.push(doc.id);
-            });
-        }
-
-        return existingIds;
+        const chunks = chunkArray(ids, 10);
+        const results = await Promise.all(
+            chunks.map(async (chunk) => {
+                const transactions = await transactionRepository
+                    .whereIn('id', chunk)
+                    .whereEqualTo('isDeleted', false)
+                    .find();
+                return transactions.map(transaction => transaction.id);
+            })
+        );
+        return results.flat();
     },
+    // Guardar un lote de transacciones
     async saveBatch(transactions: Transaction[]) {
-        const batch = db.batch();
-
-        // Agrega todas las transacciones al batch directamente, sin verificar la existencia
-        transactions.forEach(transaction => {
-            const transactionRef = db.collection('transactions').doc(transaction.id!);
-            batch.set(transactionRef, transaction);
-        });
-
         try {
-            await batch.commit();
+            await Promise.all(
+                transactions.map(async (transaction) => {
+                    await transactionRepository.create({ ...transaction, isDeleted: false });
+                })
+            );
             console.log(`Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`);
         } catch (error) {
             console.error('Error al guardar el lote de transacciones en Firestore:', error);
         }
     },
+    // Crear una nueva transacción solo si no existe
     async createTransaction(transactionData: Transaction, messageId: string) {
         try {
-            // Crea una referencia al documento usando el messageId
-            const transactionRef = db.collection('transactions').doc(messageId);
-
-            // Verifica si el documento ya existe en Firestore
-            const doc = await transactionRef.get();
-
-            if (doc.exists) {
+            const exists = await transactionRepository.findById(messageId).then(() => true).catch(() => false);
+            if (exists) {
                 console.log(`La transacción con ID ${messageId} ya existe en Firestore, no se guardará nuevamente.`);
             } else {
-                // Guarda la transacción en Firestore ya que no existe previamente
-                await transactionRef.set(transactionData, { merge: true });
+                await transactionRepository.create({ ...transactionData, id: messageId, isDeleted: false });
                 console.log('Transacción guardada en Firestore:', transactionData);
             }
         } catch (error) {
             console.error('Error al guardar la transacción en Firestore:', error);
         }
     },
-    async getAllTransactions(): Promise<Transaction[]> {
-        const snapshot = await db.collection('transactions').get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-    },
+    // Actualizar una transacción por su ID, si no está eliminada
     async updateTransaction(id: string, updatedData: Partial<Transaction>) {
         try {
-            const transactionRef = db.collection('transactions').doc(id);
-            await transactionRef.update(updatedData);
-            console.log(`Transacción ${id} actualizada exitosamente.`);
+            const transaction = await transactionRepository.findById(id);
+            if (!transaction.isDeleted) {
+                const updatedTransaction = { ...transaction, ...updatedData };
+                await transactionRepository.update(updatedTransaction);
+                console.log(`Transacción ${id} actualizada exitosamente.`);
+            } else {
+                console.log(`No se puede actualizar la transacción ${id} porque está eliminada.`);
+            }
         } catch (error) {
             console.error(`Error al actualizar la transacción ${id}:`, error);
             throw error;
         }
     },
+    // Soft delete de una transacción por su ID
     async deleteTransactionById(transactionId: string): Promise<void> {
         try {
-            const transactionRef = db.collection('transactions').doc(transactionId);
-            await transactionRef.delete();
-            console.log(`Transacción con ID ${transactionId} eliminada correctamente.`);
+            const transaction = await transactionRepository.findById(transactionId);
+            transaction.isDeleted = true;
+            await transactionRepository.update(transaction);
+            console.log(`Transacción con ID ${transactionId} marcada como eliminada (soft delete).`);
         } catch (error) {
             console.error('Error al eliminar la transacción:', error);
             throw error;
         }
     },
-
-
     // ... otras funciones del modelo
 };
 
