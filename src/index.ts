@@ -1,9 +1,10 @@
 import './config/firebase'; // Esto inicializa Firebase y fireorm
 import express from 'express';
 import dotenv from 'dotenv';
+
+import { errorHandler } from './middlewares/errorHandler';
 import transactionRouter from './modules/transaction/transaction.routes';
 import quotaRoutes from './modules/quota/quota.routes';
-import { errorHandler } from './middlewares/errorHandler';
 
 
 dotenv.config();

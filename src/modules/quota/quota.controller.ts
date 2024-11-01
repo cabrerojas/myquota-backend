@@ -43,11 +43,12 @@ export const updateQuota = async (req: Request, res: Response) => {
     }
 };
 
-export const getAllQuotas = async (req: Request, res: Response) => {
+export const getAllQuotas = async (_: Request, res: Response) => {
     try {
         const quotas = await quotaService.getAllQuotas();
         res.status(200).json(quotas);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Error al obtener las cuotas', error });
     }
 };
@@ -62,6 +63,28 @@ export const deleteQuota = async (req: Request, res: Response) => {
     }
 };
 
+export const initializeQuotasForAllTransactions = async (_: Request, res: Response) => {
+    try {
+        await quotaService.initializeQuotasForAllTransactions();
+        res.status(200).json({ message: 'Cuotas creadas para todas las transacciones que no tenían previamente.' });
+    } catch (error) {
+        console.error('Error al inicializar cuotas para todas las transacciones:', error);
+        res.status(500).json({ message: 'Error al inicializar cuotas para todas las transacciones', error });
+    }
+};
 
+/**
+ * Controlador para obtener la sumatoria de las cuotas por mes.
+ */
+export const getMonthlyQuota = async (_: Request, res: Response) => {
+    try {
+        console.log('Obteniendo sumatoria de cuotas por mes...');
+        const monthlySum = await quotaService.getMonthlyQuotaSum();
+        res.status(200).json({ monthlySum });
+    } catch (error) {
+        console.error('Error al obtener la sumatoria de cuotas por mes:', error);
+        res.status(500).json({ message: 'Error al obtener la sumatoria de cuotas por mes', error });
+    }
+};
 
 

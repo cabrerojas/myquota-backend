@@ -14,7 +14,7 @@ const addTransaction = async (req: Request, res: Response) => {
     }
 }
 
-const getTransactions = async (req: Request, res: Response) => {
+const getTransactions = async (_: Request, res: Response) => {
     try {
         const transactions = await transactionService.getAllTransactions();
         res.status(200).json(transactions);
@@ -36,7 +36,7 @@ const getTransaction = async (req: Request, res: Response) => {
     }
 };
 
-const importBankTransactions = async (req: Request, res: Response) => {
+const importBankTransactions = async (_: Request, res: Response) => {
     try {
         await transactionService.fetchBankEmails();
         res.status(200).json({ message: 'Transacciones importadas exitosamente' });
