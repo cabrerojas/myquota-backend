@@ -2,11 +2,12 @@
   "name": "myquota-backend",
   "version": "1.0.0",
   "description": "MyQuota Backend - API and services for managing payment quotas",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx ts-node src/index.ts",
-    "dev": "nodemon --watch src --ext ts,js,json --exec ts-node src/index.ts",
+    "start": "node -r tsconfig-paths/register dist/index.js",
+    "dev": "ts-node-dev -r tsconfig-paths/register src/index.ts",
+    "build": "tsc && tscpaths -p tsconfig.json -s ./src -o ./dist",
     "lint": "eslint \"src/**/*.ts\""
   },
   "keywords": [],
@@ -29,6 +30,9 @@
     "eslint": "^9.13.0",
     "globals": "^15.11.0",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "tscpaths": "^0.0.9",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.12.2"
   }
