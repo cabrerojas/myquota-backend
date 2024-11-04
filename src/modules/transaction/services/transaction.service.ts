@@ -27,7 +27,7 @@ export class TransactionService extends BaseService<Transaction> {
         const startOfMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const formattedDate = `${startOfMonth.getFullYear()}/${(startOfMonth.getMonth() + 1).toString().padStart(2, '0')}/${startOfMonth.getDate().toString().padStart(2, '0')}`;
 
-        console.log(`Buscando correos de transacciones desde ${formattedDate}`);
+        console.warn(`Buscando correos de transacciones desde ${formattedDate}`);
         const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
         const res = await gmail.users.messages.list({ userId: 'me', q: query });
 
@@ -37,11 +37,11 @@ export class TransactionService extends BaseService<Transaction> {
             const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
 
             if (newMessageIds.length === 0) {
-                console.log('No hay nuevos correos para procesar.');
+                console.warn('No hay nuevos correos para procesar.');
                 return;
             }
 
-            console.log(`Procesando ${newMessageIds.length} nuevos correos`);
+            console.warn(`Procesando ${newMessageIds.length} nuevos correos`);
             const chunks = chunkArray(newMessageIds, 100);
             let batchData: Transaction[] = [];
 
@@ -50,7 +50,7 @@ export class TransactionService extends BaseService<Transaction> {
                     chunk.map(async (messageId, index) => {
                         const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
                         let encodedMessage = email.data.payload?.body?.data;
-                        console.log(`Procesando correo ${index + 1} de ${chunk.length}`);
+                        console.warn(`Procesando correo ${index + 1} de ${chunk.length}`);
 
                         if (email.data.payload) {
                             encodedMessage = this.findHtmlOrPlainText(email.data.payload);
@@ -87,7 +87,7 @@ export class TransactionService extends BaseService<Transaction> {
                 }
             }
         } else {
-            console.log('No se encontraron correos de transacciones para este mes.');
+            console.warn('No se encontraron correos de transacciones para este mes.');
         }
     }
 

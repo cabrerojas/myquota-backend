@@ -18,7 +18,7 @@ export async function authenticate() {
         oAuth2Client.setCredentials(token);
     } else {
         const authUrl = oAuth2Client.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
-        console.log('Authorize this app by visiting this URL:', authUrl);
+        console.warn('Authorize this app by visiting this URL:', authUrl);
 
         const rl = readline.createInterface({
             input: process.stdin,
@@ -30,7 +30,7 @@ export async function authenticate() {
             oAuth2Client.setCredentials(token.tokens);
 
             fs.writeFileSync(TOKEN_PATH, JSON.stringify(token.tokens));
-            console.log('Token stored to', TOKEN_PATH);
+            console.warn('Token stored to', TOKEN_PATH);
             rl.close();
         });
     }

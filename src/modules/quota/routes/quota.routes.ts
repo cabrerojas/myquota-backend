@@ -2,13 +2,15 @@ import { Router } from "express";
 import { QuotaController } from "../controllers/quota.controller";
 import { QuotaRepository } from "../repositories/quota.repository";
 import { QuotaService } from "../services/quota.service";
+import { TransactionRepository } from "@/modules/transaction/repositories/transaction.repository";
 
 
 // Crear una función factory para la inicialización de dependencias
 const createQuotaRouter = (): Router => {
     // Inicialización de dependencias
     const repository = new QuotaRepository();
-    const service = new QuotaService(repository);
+    const transactionRepository = new TransactionRepository();
+    const service = new QuotaService(repository, transactionRepository);
     const controller = new QuotaController(service);
 
     const router = Router();

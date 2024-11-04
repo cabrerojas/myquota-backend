@@ -87,7 +87,7 @@ export class QuotaController {
      */
     getMonthlyQuota = async (_: Request, res: Response): Promise<void> => {
         try {
-            console.log('Obteniendo sumatoria de cuotas por mes...');
+            console.warn('Obteniendo sumatoria de cuotas por mes...');
             const monthlySum = await this.service.getMonthlyQuotaSum();
             res.status(200).json({ monthlySum });
         } catch (error) {

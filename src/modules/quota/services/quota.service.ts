@@ -4,28 +4,29 @@ import { QuotaRepository } from '../repositories/quota.repository';
 import { convertUtcToChileTime } from '@/shared/utils/date.utils';
 import { format } from 'date-fns-tz';
 import { BaseService } from '@/shared/classes/base.service';
+import { TransactionRepository } from '@/modules/transaction/repositories/transaction.repository';
 
 
 export class QuotaService extends BaseService<Quota> {
     // Cambiar el tipo del repository para acceder a los métodos específicos
     protected repository: QuotaRepository;
+    protected transaccionRepository: TransactionRepository
 
-    constructor(repository: QuotaRepository) {
+    constructor(repository: QuotaRepository, transaccionRepository: TransactionRepository) {
         super(repository);
         // Guardar la referencia al repository tipado
         this.repository = repository;
+        this.transaccionRepository = transaccionRepository;
     }
 
     // Otros métodos específicos del servicio
 
     async initializeQuotasForAllTransactions() {
         // Obtener todas las transacciones que no están eliminadas
-        const transactions = await this.repository.findAll();
-
-        console.log('transactions', transactions);
+        const transactions = await this.transaccionRepository.findAll();
 
         if (transactions.length === 0) {
-            console.log('No se encontraron transacciones para procesar.');
+            console.warn('No se encontraron transacciones para procesar.');
             return;
         }
 
@@ -39,7 +40,7 @@ export class QuotaService extends BaseService<Quota> {
         );
 
         if (transactionsWithoutQuotas.length === 0) {
-            console.log('Todas las transacciones ya tienen cuotas creadas.');
+            console.warn('Todas las transacciones ya tienen cuotas creadas.');
             return;
         }
 
@@ -59,17 +60,17 @@ export class QuotaService extends BaseService<Quota> {
 
                 // Crear la cuota para la transacción
                 await this.repository.create(quotaData);
-                console.log(`Cuota creada para la transacción con ID ${transaction.id}`);
+                console.warn(`Cuota creada para la transacción con ID ${transaction.id}`);
             })
         );
 
-        console.log(`Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`);
+        console.warn(`Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`);
     }
 
     async getMonthlyQuotaSum(): Promise<{ month: string, totalAmount: number }[]> {
         try {
 
-            console.log('Obteniendo sumatoria de cuotas por mes...');
+            console.warn('Obteniendo sumatoria de cuotas por mes...');
 
             // Obtener todas las cuotas
             const quotas = await this.repository.findAll();

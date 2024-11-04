@@ -8,8 +8,10 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
     protected repository: BaseFirestoreRepository<T>;
 
     constructor(_repository: BaseFirestoreRepository<T>) {
+        if (!_repository) {
+            throw new Error('Repository instance is required');
+        }
         this.repository = _repository;
-
     }
 
 
@@ -38,21 +40,39 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
 
     async findAll(filters?: Partial<T>): Promise<T[]> {
         try {
-            // Inicializa la variable `query` con el tipo adecuado
+
+            // Verificar que el repository está inicializado correctamente
+            if (!this.repository) {
+                throw new Error('Repository is not initialized');
+            }
+
+            // Inicializar la query base
             let query: IQueryable<T> = this.repository;
 
+            // Aplicar filtros si existen
             if (filters) {
                 Object.entries(filters).forEach(([key, value]) => {
                     query = query.whereEqualTo(key as keyof T, value);
                 });
             }
 
-            return await query.whereEqualTo('deletedAt', null).find();
+            // Aplicar el filtro de deletedAt
+            query = query.whereEqualTo('deletedAt', null);
+
+            // Ejecutar la query y obtener los resultados
+            const results = await query.find();
+            return results;
+
         } catch (error) {
             console.error('Error in FirestoreRepository.findAll:', error);
-            throw new RepositoryError('Error finding entities', 500);
+            if (error instanceof Error) {
+                console.error('Error details:', error.message);
+                console.error('Error stack:', error.stack);
+            }
+            throw new RepositoryError(`Error finding entities: ${error}`, 500);
         }
     }
+
 
     async findById(id: string): Promise<T | null> {
         try {

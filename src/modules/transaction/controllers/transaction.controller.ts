@@ -21,6 +21,7 @@ export class TransactionController {
     addTransaction = async (req: Request, res: Response): Promise<void> => {
         try {
             const transaction = await this.service.create(req.body);
+
             res.status(201).json(transaction);
         } catch (error) {
             console.error('Error adding transaction:', error);
@@ -34,7 +35,6 @@ export class TransactionController {
     getTransaction = async (req: Request, res: Response): Promise<void> => {
         try {
             const { transactionId } = req.params;
-            console.log('transactionId:', transactionId);
             const transaction = await this.service.findById(transactionId);
 
             if (!transaction) {

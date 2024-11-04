@@ -34,7 +34,7 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
                     await this.create({ ...transaction });
                 })
             );
-            console.log(`Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`);
+            console.warn(`Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`);
         } catch (error) {
             console.error('Error al guardar el lote de transacciones en Firestore:', error);
             throw error; // Propaga el error para manejo en niveles superiores

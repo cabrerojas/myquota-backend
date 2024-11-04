@@ -13,5 +13,5 @@ export class Quota implements IBaseEntity {
     payment_date?: Date;        // Fecha de pago de la cuota (opcional)
     createdAt!: Date;
     updatedAt!: Date;
-    deletedAt?: Date;
+    deletedAt?: Date | null;
 }
