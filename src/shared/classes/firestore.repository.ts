@@ -1,5 +1,5 @@
 // src/shared/classes/firestore.repository.ts
-import { BaseFirestoreRepository, IQueryable } from 'fireorm';
+import { BaseFirestoreRepository, getRepository, IQueryable } from 'fireorm';
 import { RepositoryError } from '../errors/custom.error';
 import { IBaseEntity, IBaseRepository } from '../interfaces/base.repository';
 
@@ -7,11 +7,13 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
 
     protected repository: BaseFirestoreRepository<T>;
 
-    constructor(_repository: BaseFirestoreRepository<T>) {
-        if (!_repository) {
-            throw new Error('Repository instance is required');
+    constructor(collectionName: string) {
+        if (!collectionName) {
+            throw new Error('Collection name is required');
         }
-        this.repository = _repository;
+
+        // Inicializa el repositorio usando el nombre de la colección
+        this.repository = getRepository<T>(collectionName);
     }
 
 

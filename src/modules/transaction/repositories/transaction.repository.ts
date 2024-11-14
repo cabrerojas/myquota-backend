@@ -1,12 +1,11 @@
 import { FirestoreRepository } from '@/shared/classes/firestore.repository';
 import { Transaction } from '../models/transaction.model';
-import { getRepository } from 'fireorm';
 import { chunkArray } from '@/shared/utils/array.utils';
 
 export class TransactionRepository extends FirestoreRepository<Transaction> {
 
     constructor() {
-        super(getRepository(Transaction));
+        super('transactions'); // Define el nombre de la colección aquí
     }
 
     // Puedes agregar métodos específicos de repositorio aquí si es necesario

@@ -73,7 +73,6 @@ export class QuotaController {
 
     initializeQuotasForAllTransactions = async (_: Request, res: Response): Promise<void> => {
         try {
-            //TODO: FIXEAR YA QUE NO TRAE LAS TRANSACCIONES
             await this.service.initializeQuotasForAllTransactions();
             res.status(200).json({ message: 'Cuotas creadas para todas las transacciones que no tenían previamente.' });
         } catch (error) {
