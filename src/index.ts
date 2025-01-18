@@ -5,12 +5,14 @@ import dotenv from 'dotenv';
 import { errorHandler } from './shared/middlewares/errorHandler';
 import createTransactionRouter from './modules/transaction/routes/transaction.routes';
 import createQuotaRouter from './modules/quota/routes/quota.routes';
+import createCreditCardRouter from './modules/creditCard/routes/creditCard.routes';
 
 
 dotenv.config();
 const app = express();
 
 app.use(express.json());
+app.use('/api', createCreditCardRouter());
 app.use('/api', createTransactionRouter());
 app.use('/api', createQuotaRouter());
 

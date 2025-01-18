@@ -33,7 +33,9 @@ export class TransactionService extends BaseService<Transaction> {
 
         if (res.data.messages) {
             const messageIds = res.data.messages.map(message => message.id!);
+            console.log('Message IDs:', messageIds);
             const existingIds = await this.repository.getExistingTransactionIds(messageIds);
+            console.log('Existing IDs#####################################:', existingIds);
             const newMessageIds = messageIds.filter(id => !existingIds.includes(id));
 
             if (newMessageIds.length === 0) {
@@ -72,7 +74,9 @@ export class TransactionService extends BaseService<Transaction> {
                                     bank: 'Banco de Chile',
                                     email: 'enviodigital@bancochile.cl',
                                     createdAt: new Date(),
-                                    updatedAt: new Date()
+                                    updatedAt: new Date(),
+                                    deletedAt: null,
+                                    creditCardId: ''
                                 };
 
                                 batchData.push(transactionData);
@@ -81,6 +85,7 @@ export class TransactionService extends BaseService<Transaction> {
                     })
                 );
 
+                console.log('Batch data:', batchData);
                 if (batchData.length > 0) {
                     await this.repository.saveBatch(batchData);
                     batchData = [];

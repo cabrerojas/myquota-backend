@@ -1,4 +1,5 @@
-import { toZonedTime, format } from 'date-fns-tz';
+import { format, toDate } from 'date-fns-tz';
+import { Timestamp } from '@google-cloud/firestore';
 
 /**
  * Convierte una cadena de texto de fecha en el formato "dd/mm/yyyy hh:mm"
@@ -25,12 +26,24 @@ export function parseFirebaseDate(dateString: string): Date | null {
  * @param dateFormat - El formato de salida deseado (por defecto es 'yyyy-MM-dd HH:mm:ss').
  * @returns La fecha convertida y formateada en la zona horaria de Chile.
  */
-export function convertUtcToChileTime(date: Date | string, dateFormat: string = 'yyyy-MM-dd HH:mm:ss'): string {
+export function convertUtcToChileTime(date: Date | string | Timestamp, dateFormat: string = 'yyyy-MM-dd HH:mm:ss'): string {
     const timeZone = 'America/Santiago';
-    const utcDate = typeof date === 'string' ? new Date(date) : date;
+    let utcDate: Date;
+
+    if (date instanceof Timestamp) {
+        utcDate = date.toDate();
+    } else if (typeof date === 'string') {
+        utcDate = new Date(date);
+    } else {
+        utcDate = date;
+    }
+
+    if (isNaN(utcDate.getTime())) {
+        throw new RangeError('Invalid time value');
+    }
 
     // Convierte la fecha UTC a la zona horaria de Chile
-    const zonedDate = toZonedTime(utcDate, timeZone);
+    const zonedDate = toDate(utcDate, { timeZone });
 
     // Formatea la fecha convertida
     return format(zonedDate, dateFormat, { timeZone });

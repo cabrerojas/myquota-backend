@@ -1,5 +1,4 @@
-
-import { Collection } from 'fireorm';
+import { Collection } from '@/shared/decorators/collection.decorator';
 import { IBaseEntity } from '@/shared/interfaces/base.repository';
 
 @Collection('quotas')
@@ -13,5 +12,6 @@ export class Quota implements IBaseEntity {
     payment_date?: Date;        // Fecha de pago de la cuota (opcional)
     createdAt!: Date;
     updatedAt!: Date;
-    deletedAt?: Date | null;
+    deletedAt!: Date | null;
 }
+ 

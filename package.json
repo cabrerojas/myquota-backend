@@ -19,7 +19,6 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "firebase-admin": "^12.7.0",
-    "fireorm": "^0.23.3",
     "google-auth-library": "^9.14.2",
     "googleapis": "^144.0.0"
   },

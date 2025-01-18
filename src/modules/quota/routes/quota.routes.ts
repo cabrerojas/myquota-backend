@@ -3,6 +3,7 @@ import { QuotaController } from "../controllers/quota.controller";
 import { QuotaRepository } from "../repositories/quota.repository";
 import { QuotaService } from "../services/quota.service";
 import { TransactionRepository } from "@/modules/transaction/repositories/transaction.repository";
+import { CreditCardRepository } from "@/modules/creditCard/repositories/creditCard.repository";
 
 
 // Crear una función factory para la inicialización de dependencias
@@ -10,7 +11,12 @@ const createQuotaRouter = (): Router => {
     // Inicialización de dependencias
     const repository = new QuotaRepository();
     const transactionRepository = new TransactionRepository();
-    const service = new QuotaService(repository, transactionRepository);
+    const creditCardRepository = new CreditCardRepository();
+    const service = new QuotaService(
+      repository,
+      transactionRepository,
+      creditCardRepository
+    );
     const controller = new QuotaController(service);
 
     const router = Router();

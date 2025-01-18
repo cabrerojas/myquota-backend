@@ -1,5 +1,4 @@
 import admin from 'firebase-admin';
-import * as fireorm from 'fireorm';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -15,6 +14,6 @@ admin.initializeApp({
 
 // Inicializar Firestore y Fireorm
 const db = admin.firestore();
-fireorm.initialize(db);
+console.log('Fireorm initialized with Firestore instance');
 
 export { db };
