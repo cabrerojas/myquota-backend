@@ -6,6 +6,8 @@ import { errorHandler } from './shared/middlewares/errorHandler';
 import createTransactionRouter from './modules/transaction/routes/transaction.routes';
 import createQuotaRouter from './modules/quota/routes/quota.routes';
 import createCreditCardRouter from './modules/creditCard/routes/creditCard.routes';
+import createUserRouter from './modules/user/routes/user.routes';
+import createAuthRouter from './modules/auth/routes/auth.routes';
 
 
 dotenv.config();
@@ -15,6 +17,9 @@ app.use(express.json());
 app.use('/api', createCreditCardRouter());
 app.use('/api', createTransactionRouter());
 app.use('/api', createQuotaRouter());
+app.use("/api", createUserRouter());
+app.use("/api", createAuthRouter());
+
 
 app.use(errorHandler);
 

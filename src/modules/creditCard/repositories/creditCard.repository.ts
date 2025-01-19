@@ -11,14 +11,8 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   }
 
   // Obtener la referencia a la subcolección de transacciones
-  getTransactionsCollection(
-    creditCardId: string
-  ): FirebaseFirestore.CollectionReference<Transaction> {
-    return this.repository
-      .doc(creditCardId)
-      .collection(
-        "transactions"
-      ) as FirebaseFirestore.CollectionReference<Transaction>;
+  getTransactionsCollection(creditCardId: string) {
+    return this.repository.doc(creditCardId).collection("transactions");
   }
 
   // Agregar una transacción a la subcolección
@@ -27,9 +21,10 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
     transaction: Transaction
   ): Promise<void> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
-    await transactionsCollection.doc(transaction.id).set(transaction);
+    await transactionsCollection
+      .doc(transaction.id)
+      .set(transaction, { merge: true });
   }
-
   // Obtener todas las transacciones de la subcolección
   async getTransactions(creditCardId: string): Promise<Transaction[]> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
@@ -50,18 +45,15 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   async getCreditCardIdByTransactionId(
     transactionId: string
   ): Promise<string | null> {
-    const creditCards = await this.findAll();
-    for (const creditCard of creditCards) {
-      const transactionsCollection = this.getTransactionsCollection(
-        creditCard.id
-      );
-      const transactionDoc = await transactionsCollection
-        .doc(transactionId)
-        .get();
-      if (transactionDoc.exists) {
-        return creditCard.id;
-      }
+    const snapshot = await this.repository.firestore
+      .collectionGroup("transactions")
+      .where("id", "==", transactionId)
+      .get();
+
+    if (!snapshot.empty) {
+      return snapshot.docs[0].ref.parent.parent?.id || null;
     }
+
     return null;
   }
 
