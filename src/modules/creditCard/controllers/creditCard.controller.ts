@@ -34,8 +34,9 @@ export class CreditCardController {
 
     getCreditCard = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { CreditCardId } = req.params;
-            const CreditCard = await this.service.findById(CreditCardId);
+            const { creditCardId } = req.params;
+            console.log("CreditCardId:", req.params);
+            const CreditCard = await this.service.findById(creditCardId);
 
             if (!CreditCard) {
                 res.status(404).json({ message: 'CreditCard no encontrada' });
@@ -54,9 +55,14 @@ export class CreditCardController {
 
     updateCreditCard = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { id } = req.params;
+            const { creditCardId } = req.params;
             const updatedData = req.body;
-            const updatedCreditCard = await this.service.update(id, updatedData);
+            console.log("CreditCardId:", creditCardId);
+            console.log("UpdatedData:", updatedData);
+            const updatedCreditCard = await this.service.update(
+              creditCardId,
+              updatedData
+            );
 
             if (!updatedCreditCard) {
                 res.status(404).json({ message: 'CreditCard no encontrada' });
@@ -78,8 +84,8 @@ export class CreditCardController {
 
     deleteCreditCard = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { id } = req.params;
-            const result = await this.service.softDelete(id);
+            const { creditCardId } = req.params;
+            const result = await this.service.softDelete(creditCardId);
 
             if (!result) {
                 res.status(404).json({ message: 'CreditCard no encontrada' });

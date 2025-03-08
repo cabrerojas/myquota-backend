@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import {
   authenticate,
   saveTokenToFirestore,
-  getTokenFromFirestore,
 } from "@/config/gmailAuth";
 import { google } from "googleapis";
 
@@ -41,17 +40,16 @@ export class AuthService {
       await db.collection("users").doc(userId).set(newUser);
     }
 
-    // 📌 Guardar `emailToken` en Firestore si no existe
-    const emailToken = await getTokenFromFirestore(userId);
-    if (!emailToken) {
-      await saveTokenToFirestore(userId, {
-        access_token: authClient.credentials.access_token,
-        refresh_token: authClient.credentials.refresh_token || null,
-        expiry_date:
-          authClient.credentials.expiry_date ||
-          new Date().getTime() + 3600 * 1000,
-      });
-    }
+    // 📌 Guardar `emailToken` en Firestore
+
+    await saveTokenToFirestore(userId, {
+      access_token: authClient.credentials.access_token,
+      refresh_token: authClient.credentials.refresh_token || null,
+      expiry_date:
+        authClient.credentials.expiry_date ||
+        new Date().getTime() + 3600 * 1000,
+    });
+    
 
     // 📌 Generar JWT con el `userId`
     const token = this.generateJWT(userId);

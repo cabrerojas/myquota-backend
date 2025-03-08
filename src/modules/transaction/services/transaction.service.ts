@@ -1,12 +1,14 @@
 import { Auth, gmail_v1, google } from 'googleapis';
 import { getTokenFromFirestore } from '../../../config/gmailAuth';
 import * as cheerio from 'cheerio';
+import { format } from "date-fns-tz";
 import { chunkArray } from '@/shared/utils/array.utils';
-import { parseFirebaseDate } from '@/shared/utils/date.utils';
+import { convertUtcToChileTime, parseFirebaseDate } from '@/shared/utils/date.utils';
 
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { Transaction } from '../models/transaction.model';
 import { BaseService } from '@/shared/classes/base.service';
+import { Quota } from '@/modules/quota/models/quota.model';
 
 export class TransactionService extends BaseService<Transaction> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
@@ -30,6 +32,8 @@ export class TransactionService extends BaseService<Transaction> {
         "❌ No se encontró un token. Conéctate con Gmail nuevamente."
       );
     }
+
+    console.log(tokenData);
 
     // 🔹 Verificar si el token ha expirado
     if (new Date().getTime() > tokenData.expiryDate) {
@@ -202,4 +206,150 @@ export class TransactionService extends BaseService<Transaction> {
 
     return { amount, currency, cardLastDigits, merchant, transactionDate };
   }
+
+  async initializeQuotasForAllTransactions(creditCardId: string) {
+    console.log(
+      `📌 Inicializando cuotas para la tarjeta de crédito: ${creditCardId}`
+    );
+
+    // Obtener todas las transacciones de la tarjeta de crédito
+    const transactions = await this.repository.findAll();
+
+    if (!transactions.length) {
+      console.warn("⚠️ No se encontraron transacciones para procesar.");
+      return;
+    }
+
+    console.log(`📌 Se encontraron ${transactions.length} transacciones.`);
+
+    // Obtener las cuotas existentes para estas transacciones
+    const existingQuotas = await Promise.all(
+      transactions.map(async (transaction) => {
+        return await this.repository.getQuotas(creditCardId, transaction.id);
+      })
+    );
+
+    // Aplanar el array de cuotas existentes
+    const allExistingQuotas = existingQuotas.flat();
+    const existingQuotaIds = new Set(
+      allExistingQuotas.map((quota) => quota.transactionId)
+    );
+
+    // Filtrar las transacciones que no tienen cuotas creadas
+    const transactionsWithoutQuotas = transactions.filter(
+      (transaction) => !existingQuotaIds.has(transaction.id)
+    );
+
+    if (!transactionsWithoutQuotas.length) {
+      console.warn("✅ Todas las transacciones ya tienen cuotas creadas.");
+      return;
+    }
+
+    console.log(
+      `📌 Se crearán cuotas para ${transactionsWithoutQuotas.length} transacciones.`
+    );
+
+    // Crear cuotas en paralelo usando Promise.all
+    await Promise.all(
+      transactionsWithoutQuotas.map(async (transaction) => {
+        const quotaData: Quota = {
+          id: this.repository.repository.doc().id, // Generar un ID único para la cuota
+          transactionId: transaction.id,
+          amount: transaction.amount,
+          due_date: transaction.transactionDate, // Fecha estimada de vencimiento
+          status: "pending",
+          currency: transaction.currency,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        };
+
+        // Crear la cuota para la transacción
+        await this.repository.addQuota(creditCardId, transaction.id, quotaData);
+        console.warn(
+          `✅ Cuota creada para la transacción con ID ${transaction.id}`
+        );
+      })
+    );
+
+    console.warn(
+      `✅ Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`
+    );
+  }
+
+  async getMonthlyQuotaSum(
+    creditCardId: string
+  ): Promise<{ month: string; currency: string; totalAmount: number }[]> {
+    try {
+      console.warn(
+        `📌 Obteniendo sumatoria de cuotas por mes para la tarjeta ${creditCardId}...`
+      );
+
+      // 🔹 Obtener todas las transacciones de la tarjeta
+      const transactions = await this.repository.findAll();
+
+      if (!transactions.length) {
+        console.warn("⚠️ No se encontraron transacciones para procesar.");
+        return [];
+      }
+
+      console.log(`📌 Se encontraron ${transactions.length} transacciones.`);
+
+      // 🔹 Obtener todas las cuotas de las transacciones
+      const quotas = await Promise.all(
+        transactions.map(async (transaction) => {
+          return await this.repository.getQuotas(creditCardId, transaction.id);
+        })
+      );
+
+      // 🔹 Aplanar el array de cuotas
+      const allQuotas = quotas.flat();
+
+      const monthlySumMap: { [key: string]: { [currency: string]: number } } =
+        {};
+
+      allQuotas.forEach((quota: Quota) => {
+        if (quota.due_date) {
+          const dueDate = Array.isArray(quota.due_date)
+            ? quota.due_date[0]
+            : quota.due_date;
+          try {
+            const localDueDate = convertUtcToChileTime(dueDate);
+            const monthKey = format(new Date(localDueDate), "yyyy-MM");
+
+            if (!monthlySumMap[monthKey]) {
+              monthlySumMap[monthKey] = {};
+            }
+
+            if (!monthlySumMap[monthKey][quota.currency]) {
+              monthlySumMap[monthKey][quota.currency] = 0;
+            }
+
+            monthlySumMap[monthKey][quota.currency] += quota.amount;
+          } catch (error) {
+            console.error("❌ Error al convertir la fecha:", dueDate, error);
+          }
+        }
+      });
+
+      // 🔹 Convertir el objeto de sumas mensuales a un array de resultados
+      const monthlySumArray = Object.entries(monthlySumMap).flatMap(
+        ([month, currencyMap]) =>
+          Object.entries(currencyMap).map(([currency, totalAmount]) => ({
+            month,
+            currency,
+            totalAmount,
+          }))
+      );
+
+      return monthlySumArray;
+    } catch (error) {
+      console.error(
+        "❌ Error al obtener la sumatoria de las cuotas por mes:",
+        error
+      );
+      throw error;
+    }
+  }
+
 }

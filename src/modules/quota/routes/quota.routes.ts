@@ -1,38 +1,96 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { QuotaController } from "../controllers/quota.controller";
 import { QuotaRepository } from "../repositories/quota.repository";
 import { QuotaService } from "../services/quota.service";
 import { TransactionRepository } from "@/modules/transaction/repositories/transaction.repository";
 import { CreditCardRepository } from "@/modules/creditCard/repositories/creditCard.repository";
 
-
-// Crear una función factory para la inicialización de dependencias
 const createQuotaRouter = (): Router => {
-    // Inicialización de dependencias
-    const repository = new QuotaRepository();
-    const transactionRepository = new TransactionRepository();
-    const creditCardRepository = new CreditCardRepository();
-    const service = new QuotaService(
-      repository,
-      transactionRepository,
-      creditCardRepository
-    );
-    const controller = new QuotaController(service);
+  const router = Router();
 
-    const router = Router();
+  // 📌 Middleware para extraer `userId`, `creditCardId` y `transactionId` de la URL
+  router.use(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    (req: Request, res: Response, next: NextFunction) => {
+      const { userId, creditCardId, transactionId } = req.params;
 
-    // Definir rutas
-    router
-        .get('/quotas', controller.getQuotas.bind(controller))
-        .post('/quota', controller.addQuota.bind(controller))
-        .get('/quotas/transaction/:transactionId', controller.getQuotasByTransactionId.bind(controller))
-        .get('/quotas/monthly-sum', controller.getMonthlyQuota.bind(controller))
-        .get('/quotas/:quotaId', controller.getQuota.bind(controller))
-        .put('/quotas/:id', controller.updateQuota.bind(controller))
-        .delete('/quotas/:id', controller.deleteQuota.bind(controller))
-        .post('/quotas/initialize-quotas', controller.initializeQuotasForAllTransactions.bind(controller))
+      if (!userId || !creditCardId || !transactionId) {
+        res.status(400).json({
+          message:
+            "❌ userId, creditCardId y transactionId son requeridos en la URL.",
+        });
+      }
 
-    return router;
+      try {
+        // 📌 Crear repositorios con los IDs de usuario, tarjeta y transacción
+        const creditCardRepository = new CreditCardRepository(userId);
+        const transactionRepository = new TransactionRepository(
+          userId,
+          creditCardId
+        );
+        const quotaRepository = new QuotaRepository(
+          userId,
+          creditCardId,
+          transactionId
+        );
+        const service = new QuotaService(
+          quotaRepository,
+          transactionRepository,
+          creditCardRepository
+        );
+        const controller = new QuotaController(service);
+
+        // 📌 Guardar en `res.locals` para que las rutas lo utilicen
+        res.locals.quotaController = controller;
+        next(); // 🔥 Asegurar que `next()` se llama para continuar con la ejecución
+      } catch (error) {
+        console.error("❌ Error en el middleware de Quota:", error);
+        res
+          .status(500)
+          .json({ message: "❌ Error interno en la configuración de Quota." });
+      }
+    }
+  );
+
+  // 📌 Definir rutas usando `res.locals.quotaController`
+  router.get(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    (req: Request, res: Response) => {
+      return res.locals.quotaController.getQuotas(req, res);
+    }
+  );
+
+  router.post(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    (req: Request, res: Response) => {
+      return res.locals.quotaController.addQuota(req, res);
+    }
+  );
+
+  router.get(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    (req: Request, res: Response) => {
+      return res.locals.quotaController.getQuota(req, res);
+    }
+  );
+
+  router.put(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    (req: Request, res: Response) => {
+      return res.locals.quotaController.updateQuota(req, res);
+    }
+  );
+
+  router.delete(
+    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    (req: Request, res: Response) => {
+      return res.locals.quotaController.deleteQuota(req, res);
+    }
+  );
+
+  
+
+  return router;
 };
 
 export default createQuotaRouter;

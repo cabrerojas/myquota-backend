@@ -7,10 +7,21 @@ import { Quota } from '@/modules/quota/models/quota.model';
 export class TransactionRepository extends FirestoreRepository<Transaction> {
   private creditCardRepository: CreditCardRepository;
 
-  constructor() {
-    super("transactions"); // Define el nombre de la colección aquí
-    this.creditCardRepository = new CreditCardRepository();
+  constructor(userId: string, creditCardId: string) {
+    super(
+      [
+        "users",
+        userId,
+        "creditCards",
+        creditCardId
+      ],
+      "transactions"
+    );
+
+    this.creditCardRepository = new CreditCardRepository(userId);
   }
+
+
 
   // Obtener la referencia a la subcolección de cuotas dentro de la subcolección de transacciones de una tarjeta de crédito
   getQuotasCollection(
@@ -86,7 +97,6 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
     try {
       await Promise.all(
         transactions.map(async (transaction) => {
-          
           // Actualizar la tarjeta de crédito correspondiente
           const creditCard = await this.creditCardRepository.findOne({
             cardLastDigits: transaction.cardLastDigits,

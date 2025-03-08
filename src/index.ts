@@ -8,6 +8,7 @@ import createQuotaRouter from './modules/quota/routes/quota.routes';
 import createCreditCardRouter from './modules/creditCard/routes/creditCard.routes';
 import createUserRouter from './modules/user/routes/user.routes';
 import createAuthRouter from './modules/auth/routes/auth.routes';
+import createBillingPeriodRouter from './modules/billingPeriod/routes/billingPeriod.routes';
 
 
 dotenv.config();
@@ -19,6 +20,7 @@ app.use('/api', createTransactionRouter());
 app.use('/api', createQuotaRouter());
 app.use("/api", createUserRouter());
 app.use("/api", createAuthRouter());
+app.use("/api", createBillingPeriodRouter());
 
 
 app.use(errorHandler);

@@ -45,9 +45,9 @@ export class QuotaController {
 
   updateQuota = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const { quotaId } = req.params;
       const updatedData = req.body;
-      const updatedQuota = await this.service.update(id, updatedData);
+      const updatedQuota = await this.service.update(quotaId, updatedData);
       if (updatedQuota) {
         res.status(200).json({ message: "Cuota actualizada exitosamente" });
       } else {
@@ -63,8 +63,8 @@ export class QuotaController {
 
   deleteQuota = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
-      const result = await this.service.softDelete(id);
+      const { quotaId } = req.params;
+      const result = await this.service.softDelete(quotaId);
       if (result) {
         res.status(200).json({ message: "Cuota eliminada correctamente" });
       } else {
@@ -78,46 +78,7 @@ export class QuotaController {
     }
   };
 
-  initializeQuotasForAllTransactions = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
-    const { cardLastDigits } = req.body; // Obtener cardLastDigits del cuerpo de la solicitud
-    try {
-      await this.service.initializeQuotasForAllTransactions(cardLastDigits);
-      res.status(200).json({
-        message:
-          "Cuotas creadas para todas las transacciones que no tenían previamente.",
-      });
-    } catch (error) {
-      console.error(
-        "Error al inicializar cuotas para todas las transacciones:",
-        error
-      );
-      res.status(500).json({
-        message: "Error al inicializar cuotas para todas las transacciones",
-        error,
-      });
-    }
-  };
-
-  /**
-   * Controlador para obtener la sumatoria de las cuotas por mes.
-   */
-  getMonthlyQuota = async (req: Request, res: Response): Promise<void> => {
-    const { cardLastDigits } = req.body; // Obtener cardLastDigits del cuerpo de la solicitud
-    try {
-      const monthlySum = await this.service.getMonthlyQuotaSum(cardLastDigits);
-      res.status(200).json({ monthlySum });
-    } catch (error) {
-      console.error("Error al obtener la sumatoria de cuotas por mes:", error);
-      res.status(500).json({
-        message: "Error al obtener la sumatoria de cuotas por mes",
-        error,
-      });
-    }
-  };
-
+ 
   getQuotasByTransactionId = async (
     req: Request,
     res: Response

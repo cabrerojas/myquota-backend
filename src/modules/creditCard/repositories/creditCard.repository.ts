@@ -6,8 +6,8 @@ import { Transaction } from '@/modules/transaction/models/transaction.model';
 import { BillingPeriod } from '../models/billingPeriod.model';
 
 export class CreditCardRepository extends FirestoreRepository<CreditCard> {
-  constructor() {
-    super("creditCards"); // Define el nombre de la colección aquí
+  constructor(userId: string) {
+    super(["users", userId], "creditCards");
   }
 
   // Obtener la referencia a la subcolección de transacciones

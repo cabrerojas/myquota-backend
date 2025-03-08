@@ -54,9 +54,12 @@ export class TransactionController {
 
   updateTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const { transactionId } = req.params;
       const updatedData = req.body;
-      const updatedTransaction = await this.service.update(id, updatedData);
+      const updatedTransaction = await this.service.update(
+        transactionId,
+        updatedData
+      );
 
       if (!updatedTransaction) {
         res.status(404).json({ message: "Transacción no encontrada" });
@@ -78,8 +81,8 @@ export class TransactionController {
 
   deleteTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
-      const result = await this.service.softDelete(id);
+      const { transactionId } = req.params;
+      const result = await this.service.softDelete(transactionId);
 
       if (!result) {
         res.status(404).json({ message: "Transacción no encontrada" });
@@ -104,12 +107,9 @@ export class TransactionController {
       const userId = req.user?.userId; // 📌 Ahora el `userId` viene del JWT
 
       if (!userId) {
-        res
-          .status(400)
-          .json({ message: "❌ Token invalido." });
+        res.status(400).json({ message: "❌ Token invalido." });
         return;
       }
-
 
       await this.service.fetchBankEmails(userId); // 🔹 Pasar userId al servicio
       res
@@ -119,6 +119,53 @@ export class TransactionController {
       console.error("Error importing transactions:", error);
       res.status(500).json({
         message: "Error al importar transacciones",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
+  initializeQuotasForAllTransactions = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    const { creditCardId } = req.params; // Obtener userId y creditCardId de la URL
+
+    try {
+      await this.service.initializeQuotasForAllTransactions(creditCardId);
+      res.status(200).json({
+        message:
+          "✅ Cuotas creadas para todas las transacciones que no las tenían previamente.",
+      });
+    } catch (error) {
+      console.error(
+        "❌ Error al inicializar cuotas para todas las transacciones:",
+        error
+      );
+      res.status(500).json({
+        message: "❌ Error al inicializar cuotas para todas las transacciones",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
+  /**
+   * Controlador para obtener la sumatoria de las cuotas por mes.
+   */
+  getMonthlyQuotaSum = async (req: Request, res: Response): Promise<void> => {
+    const { creditCardId } = req.params;
+
+    try {
+      const monthlyQuotaSum = await this.service.getMonthlyQuotaSum(
+        creditCardId
+      );
+      res.status(200).json(monthlyQuotaSum);
+    } catch (error) {
+      console.error(
+        "❌ Error al obtener la sumatoria de cuotas por mes:",
+        error
+      );
+      res.status(500).json({
+        message: "❌ Error al obtener la sumatoria de cuotas por mes",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
