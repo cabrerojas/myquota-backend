@@ -3,12 +3,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 
 import { errorHandler } from './shared/middlewares/errorHandler';
-import createTransactionRouter from './modules/transaction/routes/transaction.routes';
-import createQuotaRouter from './modules/quota/routes/quota.routes';
-import createCreditCardRouter from './modules/creditCard/routes/creditCard.routes';
-import createUserRouter from './modules/user/routes/user.routes';
-import createAuthRouter from './modules/auth/routes/auth.routes';
-import createBillingPeriodRouter from './modules/billingPeriod/routes/billingPeriod.routes';
+import createTransactionRouter from './modules/transaction/transaction.routes';
+import createQuotaRouter from './modules/quota/quota.routes';
+import createCreditCardRouter from './modules/creditCard/creditCard.routes';
+import createUserRouter from './modules/user/user.routes';
+import createAuthRouter from './modules/auth/auth.routes';
+import createBillingPeriodRouter from './modules/billingPeriod/billingPeriod.routes';
 
 
 dotenv.config();
