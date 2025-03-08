@@ -3,6 +3,7 @@ import { TransactionController } from "./transaction.controller";
 import { TransactionRepository } from "./transaction.repository";
 import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
 
 const createTransactionRouter = (): Router => {
   const router = Router();
@@ -27,7 +28,14 @@ const createTransactionRouter = (): Router => {
           userId,
           creditCardId
         );
-        const service = new TransactionService(transactionRepository);
+        const billingPeriodRepository = new BillingPeriodRepository(
+          userId,
+          creditCardId
+        );
+        const service = new TransactionService(
+          transactionRepository,
+          billingPeriodRepository
+        );
         const controller = new TransactionController(service);
 
         // 📌 Guardar en `res.locals` para que las rutas lo utilicen

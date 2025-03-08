@@ -1,7 +1,6 @@
 import { Auth, gmail_v1, google } from 'googleapis';
 import { getTokenFromFirestore } from '../../config/gmailAuth';
 import * as cheerio from 'cheerio';
-import { format } from "date-fns-tz";
 import { chunkArray } from '@/shared/utils/array.utils';
 import { convertUtcToChileTime, parseFirebaseDate } from '@/shared/utils/date.utils';
 
@@ -9,15 +8,21 @@ import { TransactionRepository } from './transaction.repository';
 import { Transaction } from './transaction.model';
 import { BaseService } from '@/shared/classes/base.service';
 import { Quota } from '@/modules/quota/quota.model';
+import { BillingPeriodRepository } from '../billingPeriod/billingPeriod.repository';
 
 export class TransactionService extends BaseService<Transaction> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
   protected repository: TransactionRepository;
+  private billingPeriodRepository: BillingPeriodRepository;
 
-  constructor(repository: TransactionRepository) {
+  constructor(
+    repository: TransactionRepository,
+    billingPeriodRepository: BillingPeriodRepository
+  ) {
     super(repository);
     // Guardar la referencia al repository tipado
     this.repository = repository;
+    this.billingPeriodRepository = billingPeriodRepository;
   }
 
   // Otros métodos específicos del servicio
@@ -277,17 +282,40 @@ export class TransactionService extends BaseService<Transaction> {
     );
   }
 
+  /**
+   * 🔹 Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
+   */
   async getMonthlyQuotaSum(
     creditCardId: string
-  ): Promise<{ month: string; currency: string; totalAmount: number }[]> {
+  ): Promise<{ period: string; currency: string; totalAmount: number }[]> {
     try {
       console.warn(
-        `📌 Obteniendo sumatoria de cuotas por mes para la tarjeta ${creditCardId}...`
+        `📌 Obteniendo sumatoria de cuotas por período de facturación para la tarjeta ${creditCardId}...`
       );
+
+      // 🔹 Obtener los períodos de facturación de la tarjeta
+      const billingPeriods = await this.billingPeriodRepository.findAll();
+      if (!billingPeriods.length) {
+        console.warn("⚠️ No se encontraron períodos de facturación.");
+        return [];
+      }
+
+      // 🔹 Convertir las fechas de `billingPeriods` a hora de Chile
+      const formattedBillingPeriods = billingPeriods.map((period) => ({
+        periodKey: `${convertUtcToChileTime(
+          period.startDate,
+          "yyyy-MM-dd"
+        )} - ${convertUtcToChileTime(period.endDate, "yyyy-MM-dd")}`,
+        startDate: new Date(
+          convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss")
+        ),
+        endDate: new Date(
+          convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss")
+        ),
+      }));
 
       // 🔹 Obtener todas las transacciones de la tarjeta
       const transactions = await this.repository.findAll();
-
       if (!transactions.length) {
         console.warn("⚠️ No se encontraron transacciones para procesar.");
         return [];
@@ -304,52 +332,55 @@ export class TransactionService extends BaseService<Transaction> {
 
       // 🔹 Aplanar el array de cuotas
       const allQuotas = quotas.flat();
+      console.log(`📌 Se encontraron ${allQuotas.length} cuotas.`);
 
-      const monthlySumMap: { [key: string]: { [currency: string]: number } } =
+      // 🔹 Inicializar el mapa de sumas por período
+      const periodSumMap: { [key: string]: { [currency: string]: number } } =
         {};
 
-      allQuotas.forEach((quota: Quota) => {
-        if (quota.due_date) {
-          const dueDate = Array.isArray(quota.due_date)
-            ? quota.due_date[0]
-            : quota.due_date;
-          try {
-            const localDueDate = convertUtcToChileTime(dueDate);
-            const monthKey = format(new Date(localDueDate), "yyyy-MM");
+      formattedBillingPeriods.forEach((billingPeriod) => {
+        periodSumMap[billingPeriod.periodKey] = {};
 
-            if (!monthlySumMap[monthKey]) {
-              monthlySumMap[monthKey] = {};
-            }
+        // 🔹 Filtrar las cuotas que caen dentro del período de facturación
+        const quotasInPeriod = allQuotas.filter((quota) => {
+          if (!quota.due_date) return false;
 
-            if (!monthlySumMap[monthKey][quota.currency]) {
-              monthlySumMap[monthKey][quota.currency] = 0;
-            }
+          const quotaDate = new Date(
+            convertUtcToChileTime(quota.due_date, "yyyy-MM-dd HH:mm:ss")
+          );
 
-            monthlySumMap[monthKey][quota.currency] += quota.amount;
-          } catch (error) {
-            console.error("❌ Error al convertir la fecha:", dueDate, error);
+          return (
+            quotaDate >= billingPeriod.startDate &&
+            quotaDate <= billingPeriod.endDate
+          );
+        });
+
+        // 🔹 Sumar las cuotas dentro del período por moneda
+        quotasInPeriod.forEach((quota) => {
+          if (!periodSumMap[billingPeriod.periodKey][quota.currency]) {
+            periodSumMap[billingPeriod.periodKey][quota.currency] = 0;
           }
-        }
+          periodSumMap[billingPeriod.periodKey][quota.currency] += quota.amount;
+        });
       });
 
-      // 🔹 Convertir el objeto de sumas mensuales a un array de resultados
-      const monthlySumArray = Object.entries(monthlySumMap).flatMap(
-        ([month, currencyMap]) =>
+      // 🔹 Convertir el objeto de sumas a un array de resultados
+      const periodSumArray = Object.entries(periodSumMap).flatMap(
+        ([period, currencyMap]) =>
           Object.entries(currencyMap).map(([currency, totalAmount]) => ({
-            month,
+            period,
             currency,
             totalAmount,
           }))
       );
 
-      return monthlySumArray;
+      return periodSumArray;
     } catch (error) {
       console.error(
-        "❌ Error al obtener la sumatoria de las cuotas por mes:",
+        "❌ Error al obtener la sumatoria de las cuotas por período de facturación:",
         error
       );
       throw error;
     }
   }
-
 }
