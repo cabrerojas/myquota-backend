@@ -5,13 +5,21 @@ import { BaseService } from "@/shared/classes/base.service";
 export class UserService extends BaseService<User> {
   protected repository: UserRepository;
 
-  constructor(repository : UserRepository) {
+  constructor(repository: UserRepository) {
     super(repository);
     this.repository = new UserRepository();
   }
 
-  // Crear un usuario
+  // Crear un usuario asegurando que el email sea único
   async createUser(email: string, name: string): Promise<User> {
+    // 🔹 Verificar si ya existe un usuario con este email
+    const existingUser = await this.repository.findOne({ email });
+
+    if (existingUser) {
+      throw new Error(`❌ Ya existe un usuario con el email: ${email}`);
+    }
+
+    // 🔹 Si no existe, proceder con la creación
     const user: User = {
       id: "",
       email,
@@ -20,6 +28,7 @@ export class UserService extends BaseService<User> {
       updatedAt: new Date(),
       deletedAt: null,
     };
+
     return this.repository.create(user);
   }
 

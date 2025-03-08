@@ -18,17 +18,39 @@ export class UserController {
     }
   };
 
-  // 📌 Crear un nuevo usuario
+  // 📌 Crear un nuevo usuario asegurando que el email sea único
   createUser = async (req: Request, res: Response): Promise<void> => {
     try {
-      const user = await this.service.create(req.body);
-      res.status(201).json(user);
+      const { email, name } = req.body;
+
+      // 🔹 Validar que se envíen `email` y `name`
+      if (!email || !name) {
+         res
+          .status(400)
+          .json({ message: "❌ Email y nombre son requeridos." });
+          return;
+      }
+
+      // 🔹 Crear el usuario
+      const user = await this.service.createUser(email, name);
+       res.status(201).json(user); // 🔥 Asegurar que la función termine aquí
+       return;
     } catch (error) {
-      console.error("Error creating user:", error);
-      res.status(500).json({
-        message: "Error al crear el usuario",
+      console.error("❌ Error creating user:", error);
+
+      if (
+        error instanceof Error &&
+        error.message.includes("Ya existe un usuario")
+      ) {
+         res.status(409).json({ message: error.message }); // 🔥 Agregar `return` aquí
+        return;
+      }
+
+       res.status(500).json({
+        message: "❌ Error al crear el usuario",
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return;
     }
   };
 
