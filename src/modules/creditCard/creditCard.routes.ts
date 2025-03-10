@@ -2,20 +2,21 @@ import { Router, Request, Response, NextFunction } from "express";
 import { CreditCardController } from "./creditCard.controller";
 import { CreditCardRepository } from "./creditCard.repository";
 import { CreditCardService } from "./creditCard.service";
+import { authenticate } from "@/shared/middlewares/auth.middleware";
 
 const createCreditCardRouter = (): Router => {
   const router = Router();
 
-  // Middleware para extraer `userId` de la URL y configurar las dependencias
+  // 📌 Middleware para autenticación y configuración de dependencias
   router.use(
-    "/:userId/creditCards",
+    "/creditCards",
+    authenticate,
     (req: Request, res: Response, next: NextFunction) => {
-      const { userId } = req.params;
+      const userId = req.user?.userId;
 
       if (!userId) {
-         res
-          .status(400)
-          .json({ message: "❌ userId es requerido en la URL." });
+         res.status(400).json({ message: "❌ userId es requerido." });
+         return;
       }
 
       try {
@@ -24,9 +25,9 @@ const createCreditCardRouter = (): Router => {
         const service = new CreditCardService(repository);
         const controller = new CreditCardController(service);
 
-        // 📌 Guardar en `res.locals` en lugar de `req`
+        // 📌 Guardar en `res.locals`
         res.locals.creditCardController = controller;
-        next(); // 🔥 Asegurar que `next()` se llama para continuar con la ejecución
+        next(); // 🔥 Continuar con la ejecución
       } catch (error) {
         console.error("❌ Error en el middleware de CreditCard:", error);
         res
@@ -39,34 +40,25 @@ const createCreditCardRouter = (): Router => {
   );
 
   // 📌 Definir rutas usando `res.locals.creditCardController`
-  router.get("/:userId/creditCards", (req: Request, res: Response) => {
+  router.get("/creditCards", (req: Request, res: Response) => {
     return res.locals.creditCardController.getCreditCards(req, res);
   });
 
-  router.post("/:userId/creditCards", (req: Request, res: Response) => {
+  router.post("/creditCards", (req: Request, res: Response) => {
     return res.locals.creditCardController.addCreditCard(req, res);
   });
 
-  router.get(
-    "/:userId/creditCards/:creditCardId",
-    (req: Request, res: Response) => {
-      return res.locals.creditCardController.getCreditCard(req, res);
-    }
-  );
+  router.get("/creditCards/:creditCardId", (req: Request, res: Response) => {
+    return res.locals.creditCardController.getCreditCard(req, res);
+  });
 
-  router.put(
-    "/:userId/creditCards/:creditCardId",
-    (req: Request, res: Response) => {
-      return res.locals.creditCardController.updateCreditCard(req, res);
-    }
-  );
+  router.put("/creditCards/:creditCardId", (req: Request, res: Response) => {
+    return res.locals.creditCardController.updateCreditCard(req, res);
+  });
 
-  router.delete(
-    "/:userId/creditCards/:creditCardId",
-    (req: Request, res: Response) => {
-      return res.locals.creditCardController.deleteCreditCard(req, res);
-    }
-  );
+  router.delete("/creditCards/:creditCardId", (req: Request, res: Response) => {
+    return res.locals.creditCardController.deleteCreditCard(req, res);
+  });
 
   return router;
 };

@@ -4,25 +4,28 @@ import { QuotaRepository } from "./quota.repository";
 import { QuotaService } from "./quota.service";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import { authenticate } from "@/shared/middlewares/auth.middleware";
 
 const createQuotaRouter = (): Router => {
   const router = Router();
 
-  // 📌 Middleware para extraer `userId`, `creditCardId` y `transactionId` de la URL
+  // 📌 Middleware para validar JWT y extraer `creditCardId` y `transactionId`
   router.use(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    authenticate, // 🔥 Primero validamos el JWT
     (req: Request, res: Response, next: NextFunction) => {
-      const { userId, creditCardId, transactionId } = req.params;
+      const { creditCardId, transactionId } = req.params;
+      const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
 
       if (!userId || !creditCardId || !transactionId) {
-        res.status(400).json({
-          message:
-            "❌ userId, creditCardId y transactionId son requeridos en la URL.",
+         res.status(400).json({
+          message: "❌ creditCardId y transactionId son requeridos en la URL.",
         });
+        return;
       }
 
       try {
-        // 📌 Crear repositorios con los IDs de usuario, tarjeta y transacción
+        // 📌 Crear repositorios con `userId` desde JWT
         const creditCardRepository = new CreditCardRepository(userId);
         const transactionRepository = new TransactionRepository(
           userId,
@@ -45,50 +48,48 @@ const createQuotaRouter = (): Router => {
         next(); // 🔥 Asegurar que `next()` se llama para continuar con la ejecución
       } catch (error) {
         console.error("❌ Error en el middleware de Quota:", error);
-        res
-          .status(500)
-          .json({ message: "❌ Error interno en la configuración de Quota." });
+        res.status(500).json({
+          message: "❌ Error interno en la configuración de Quota.",
+        });
       }
     }
   );
 
   // 📌 Definir rutas usando `res.locals.quotaController`
   router.get(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas",
     (req: Request, res: Response) => {
       return res.locals.quotaController.getQuotas(req, res);
     }
   );
 
   router.post(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas",
     (req: Request, res: Response) => {
       return res.locals.quotaController.addQuota(req, res);
     }
   );
 
   router.get(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
     (req: Request, res: Response) => {
       return res.locals.quotaController.getQuota(req, res);
     }
   );
 
   router.put(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
     (req: Request, res: Response) => {
       return res.locals.quotaController.updateQuota(req, res);
     }
   );
 
   router.delete(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    "/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
     (req: Request, res: Response) => {
       return res.locals.quotaController.deleteQuota(req, res);
     }
   );
-
-  
 
   return router;
 };

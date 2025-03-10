@@ -8,22 +8,23 @@ import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.reposito
 const createTransactionRouter = (): Router => {
   const router = Router();
 
-  // 📌 Middleware para extraer `userId` y `creditCardId` de la URL y configurar las dependencias
+  // 📌 Middleware para validar JWT y extraer `creditCardId` de la URL
   router.use(
-    "/:userId/creditCards/:creditCardId/transactions",
+    "/creditCards/:creditCardId/transactions",
+    authenticate, // 🔥 Primero validamos el JWT
     (req: Request, res: Response, next: NextFunction) => {
-      const { userId, creditCardId } = req.params;
+      const { creditCardId } = req.params;
+      const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
 
       if (!userId || !creditCardId) {
-        res
-          .status(400)
-          .json({
-            message: "❌ userId y creditCardId son requeridos en la URL.",
-          });
+         res.status(400).json({
+          message: "❌ creditCardId es requerido en la URL.",
+        });
+        return;
       }
 
       try {
-        // 📌 Crear repositorios con los IDs de usuario y tarjeta de crédito
+        // 📌 Crear repositorios con `userId` desde JWT
         const transactionRepository = new TransactionRepository(
           userId,
           creditCardId
@@ -43,60 +44,58 @@ const createTransactionRouter = (): Router => {
         next(); // 🔥 Asegurar que `next()` se llama para continuar con la ejecución
       } catch (error) {
         console.error("❌ Error en el middleware de Transaction:", error);
-        res
-          .status(500)
-          .json({
-            message: "❌ Error interno en la configuración de Transaction.",
-          });
+        res.status(500).json({
+          message: "❌ Error interno en la configuración de Transaction.",
+        });
       }
     }
   );
 
   // 📌 Definir rutas usando `res.locals.transactionController`
   router.get(
-    "/:userId/creditCards/:creditCardId/transactions",
+    "/creditCards/:creditCardId/transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransactions(req, res);
     }
   );
 
   router.post(
-    "/:userId/creditCards/:creditCardId/transactions",
+    "/creditCards/:creditCardId/transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.addTransaction(req, res);
     }
   );
 
   router.get(
-    "/:userId/creditCards/:creditCardId/transactions/monthly-sum",
+    "/creditCards/:creditCardId/transactions/monthly-sum",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getMonthlyQuotaSum(req, res);
     }
   );
 
   router.get(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId",
+    "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransaction(req, res);
     }
   );
 
   router.put(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId",
+    "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.updateTransaction(req, res);
     }
   );
 
   router.delete(
-    "/:userId/creditCards/:creditCardId/transactions/:transactionId",
+    "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.deleteTransaction(req, res);
     }
   );
 
   router.post(
-    "/:userId/creditCards/:creditCardId/transactions/initialize-quotas",
+    "/creditCards/:creditCardId/transactions/initialize-quotas",
     (req: Request, res: Response) => {
       return res.locals.transactionController.initializeQuotasForAllTransactions(
         req,
@@ -106,8 +105,7 @@ const createTransactionRouter = (): Router => {
   );
 
   router.post(
-    "/:userId/creditCards/:creditCardId/transactions/import-bank-transactions",
-    authenticate,
+    "/creditCards/:creditCardId/transactions/import-bank-transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.importBankTransactions(req, res);
     }
