@@ -1,19 +1,28 @@
 import { google, Auth } from "googleapis";
 import readline from "readline";
-import fs from "fs";
-import path from "path";
 import { db } from "@/config/firebase";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/gmail.readonly",
 ];
-const CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
 
-// 📌 Obtener credenciales de Google
+// 📌 Decodificar credenciales desde variable de entorno
 function getGoogleCredentials(): Auth.OAuth2Client {
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf8"));
+  if (!process.env.CREDENTIALS_JSON) {
+    throw new Error(
+      "❌ CREDENTIALS_JSON no está definido en las variables de entorno."
+    );
+  }
+
+  const credentialsJson = Buffer.from(
+    process.env.CREDENTIALS_JSON,
+    "base64"
+  ).toString("utf8");
+  const credentials = JSON.parse(credentialsJson);
+
   const { client_secret, client_id } = credentials.installed;
+
   return new google.auth.OAuth2(
     client_id,
     client_secret,
@@ -22,20 +31,35 @@ function getGoogleCredentials(): Auth.OAuth2Client {
 }
 
 // 📌 Guardar el token de Gmail en Firestore
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function saveTokenToFirestore(userId: string, tokens: any): Promise<void> {
-    await db.collection("users").doc(userId).collection("emailTokens").doc("gmail").set({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiryDate: tokens.expiry_date,
+export async function saveTokenToFirestore(
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tokens: any
+): Promise<void> {
+  await db
+    .collection("users")
+    .doc(userId)
+    .collection("emailTokens")
+    .doc("gmail")
+    .set({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiryDate: tokens.expiry_date,
     });
 }
 
 // 📌 Obtener el token de Gmail desde Firestore
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getTokenFromFirestore(userId: string): Promise<any | null> {
-    const tokenDoc = await db.collection("users").doc(userId).collection("emailTokens").doc("gmail").get();
-    return tokenDoc.exists ? tokenDoc.data() : null;
+export async function getTokenFromFirestore(
+  userId: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any | null> {
+  const tokenDoc = await db
+    .collection("users")
+    .doc(userId)
+    .collection("emailTokens")
+    .doc("gmail")
+    .get();
+  return tokenDoc.exists ? tokenDoc.data() : null;
 }
 
 // 📌 Autenticar con Gmail
