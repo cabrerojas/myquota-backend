@@ -1,82 +1,66 @@
-import { db } from "@/config/firebase";
+import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
-import {
-  authenticate,
-  saveTokenToFirestore,
-} from "@/config/gmailAuth";
-import { google } from "googleapis";
+import { db } from "@/config/firebase";
+
+const GOOGLE_CLIENT_ID =
+  "843354250947-or01hgaotco18ounocgpakr6v2usdhkj.apps.googleusercontent.com";
 
 export class AuthService {
-  async loginWithGoogle(): Promise<string> {
-    // 🔹 Autenticar con Gmail y obtener el cliente de autenticación
-    const authClient = await authenticate();
+  async loginWithGoogle(idToken: string): Promise<string> {
+    try {
+      // 🔹 Verificar el `idToken` con Google
+      const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: GOOGLE_CLIENT_ID,
+      });
 
-    if (!authClient.credentials.access_token) {
-      throw new Error("❌ No se pudo obtener el access_token de Google.");
+      const payload = ticket.getPayload();
+      if (!payload) {
+        throw new Error("Token inválido");
+      }
+
+      const { email, name, picture } = payload;
+      console.log("Usuario autenticado:", email);
+
+      // 🔹 Buscar usuario en Firestore
+      const usersCollection = db.collection("users");
+      const userQuery = await usersCollection
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+
+      let userId: string;
+      if (userQuery.empty) {
+        console.log("⚠️ Usuario no encontrado, creando uno nuevo...");
+
+        const newUserRef = usersCollection.doc();
+        userId = newUserRef.id;
+
+        const newUser = {
+          id: userId,
+          email,
+          name,
+          picture,
+          createdAt: new Date(),
+        };
+
+        await newUserRef.set(newUser);
+      } else {
+        const userDoc = userQuery.docs[0];
+        userId = userDoc.id;
+        console.log(`✅ Usuario encontrado: ${userId}`);
+      }
+
+      // 🔹 Generar JWT para el usuario
+      const jwtToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, {
+        expiresIn: "7d",
+      });
+
+      return jwtToken;
+    } catch (error) {
+      console.error("Error en loginWithGoogle:", error);
+      throw new Error("Error al autenticar con Google");
     }
-
-    const oauth2 = google.oauth2({ version: "v2", auth: authClient });
-
-    // 🔹 Obtener información del usuario (email)
-    const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email;
-
-    if (!email) {
-      throw new Error("❌ No se pudo obtener el email del usuario.");
-    }
-
-    console.warn(`🔍 Buscando usuario con email: ${email}`);
-
-    // 🔹 Buscar el usuario en Firestore por su email
-    const usersCollection = db.collection("users");
-    const userQuery = await usersCollection
-      .where("email", "==", email)
-      .limit(1)
-      .get();
-
-    let userId: string;
-
-    if (userQuery.empty) {
-      console.warn("⚠️ Usuario no encontrado, creando uno nuevo...");
-
-      // 📌 Si el usuario no existe, generamos un nuevo ID y lo guardamos
-      const newUserRef = usersCollection.doc(); // 🔥 Genera un nuevo ID automáticamente
-      userId = newUserRef.id;
-
-      const newUser = {
-        id: userId,
-        email: email,
-        name: email.split("@")[0], // Usamos el prefijo del correo como nombre
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null,
-      };
-
-      await newUserRef.set(newUser);
-    } else {
-      // 📌 Si el usuario ya existe, obtener su `userId`
-      const userDoc = userQuery.docs[0];
-      userId = userDoc.id;
-      console.warn(`✅ Usuario encontrado: ${userId}`);
-    }
-
-    // 📌 Guardar `emailToken` en Firestore
-    await saveTokenToFirestore(userId, {
-      access_token: authClient.credentials.access_token,
-      refresh_token: authClient.credentials.refresh_token || null,
-      expiry_date:
-        authClient.credentials.expiry_date ||
-        new Date().getTime() + 3600 * 1000,
-    });
-
-    console.warn(`✅ Token de Gmail guardado para ${userId}`);
-
-    // 📌 Generar JWT con el `userId`
-    const token = this.generateJWT(userId);
-    return token;
-  }
-
-  private generateJWT(userId: string): string {
-    return jwt.sign({ userId }, process.env.JWT_SECRET!, { expiresIn: "7d" });
   }
 }
