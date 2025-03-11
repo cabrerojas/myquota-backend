@@ -20,12 +20,14 @@
     "express": "^4.21.1",
     "firebase-admin": "^12.7.0",
     "google-auth-library": "^9.14.2",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.8.1",
+    "@types/reflect-metadata": "^0.0.5",
     "eslint": "^9.13.0",
     "globals": "^15.11.0",
     "ts-node": "^10.9.2",
