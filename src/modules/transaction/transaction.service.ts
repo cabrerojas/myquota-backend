@@ -1,14 +1,17 @@
-import { Auth, gmail_v1, google } from 'googleapis';
-import { getTokenFromFirestore } from '../../config/gmailAuth';
-import * as cheerio from 'cheerio';
-import { chunkArray } from '@/shared/utils/array.utils';
-import { convertUtcToChileTime, parseFirebaseDate } from '@/shared/utils/date.utils';
+import { Auth, gmail_v1, google } from "googleapis";
+import { getTokenFromFirestore } from "../../config/gmailAuth";
+import * as cheerio from "cheerio";
+import { chunkArray } from "@/shared/utils/array.utils";
+import {
+  convertUtcToChileTime,
+  parseFirebaseDate,
+} from "@/shared/utils/date.utils";
 
-import { TransactionRepository } from './transaction.repository';
-import { Transaction } from './transaction.model';
-import { BaseService } from '@/shared/classes/base.service';
-import { Quota } from '@/modules/quota/quota.model';
-import { BillingPeriodRepository } from '../billingPeriod/billingPeriod.repository';
+import { TransactionRepository } from "./transaction.repository";
+import { Transaction } from "./transaction.model";
+import { BaseService } from "@/shared/classes/base.service";
+import { Quota } from "@/modules/quota/quota.model";
+import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
 
 export class TransactionService extends BaseService<Transaction> {
   // Cambiar el tipo del repository para acceder a los métodos específicos

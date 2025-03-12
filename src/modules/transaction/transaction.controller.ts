@@ -1,5 +1,5 @@
-import { Request, Response } from 'express';
-import { TransactionService } from './transaction.service';
+import { Request, Response } from "express";
+import { TransactionService } from "./transaction.service";
 
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
@@ -121,6 +121,7 @@ export class TransactionController {
         message: "Error al importar transacciones",
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return;
     }
   };
 
