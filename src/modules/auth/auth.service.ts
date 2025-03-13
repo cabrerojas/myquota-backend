@@ -1,7 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import { db } from "@/config/firebase";
-import { saveTokenToFirestore } from "@/config/gmailAuth";
 
 const GOOGLE_CLIENT_ID =
   "843354250947-or01hgaotco18ounocgpakr6v2usdhkj.apps.googleusercontent.com";
@@ -53,13 +52,8 @@ export class AuthService {
         console.log(`✅ Usuario encontrado: ${userId}`);
       }
 
-      // 📌 Guardar `emailToken` en Firestore
-      await saveTokenToFirestore(userId, {
-        access_token: client.credentials.access_token,
-        refresh_token: client.credentials.refresh_token || null,
-        expiry_date:
-          client.credentials.expiry_date || new Date().getTime() + 3600 * 1000,
-      });
+      console.log("🔑 Generando token de acceso...");
+      console.log(client);
 
       // 🔹 Generar JWT para el usuario
       const jwtToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, {
