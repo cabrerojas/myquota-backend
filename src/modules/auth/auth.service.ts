@@ -1,69 +1,82 @@
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
-import { db } from "@/config/firebase";
-
-const GOOGLE_CLIENT_ID =
-  "843354250947-or01hgaotco18ounocgpakr6v2usdhkj.apps.googleusercontent.com";
+import { UserRepository } from "@modules/user/user.repository";
+import { User } from "@modules/user/user.model";
+import { AuthError } from "@shared/errors/custom.error";
 
 export class AuthService {
+  constructor(private readonly userRepository: UserRepository) {}
+
   async loginWithGoogle(idToken: string): Promise<string> {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      throw new AuthError(
+        "GOOGLE_CLIENT_ID no configurado en variables de entorno",
+        500,
+      );
+    }
+
+    // 🔹 Verificar el `idToken` con Google
+    const client = new OAuth2Client(clientId);
+    let payload;
     try {
-      // 🔹 Verificar el `idToken` con Google
-      const client = new OAuth2Client(GOOGLE_CLIENT_ID);
       const ticket = await client.verifyIdToken({
         idToken,
-        audience: GOOGLE_CLIENT_ID,
+        audience: clientId,
       });
-
-      const payload = ticket.getPayload();
-      if (!payload) {
-        throw new Error("Token inválido");
-      }
-
-      const { email, name, picture } = payload;
-      console.log("Usuario autenticado:", email);
-
-      // 🔹 Buscar usuario en Firestore
-      const usersCollection = db.collection("users");
-      const userQuery = await usersCollection
-        .where("email", "==", email)
-        .limit(1)
-        .get();
-
-      let userId: string;
-      if (userQuery.empty) {
-        console.log("⚠️ Usuario no encontrado, creando uno nuevo...");
-
-        const newUserRef = usersCollection.doc();
-        userId = newUserRef.id;
-
-        const newUser = {
-          id: userId,
-          email,
-          name,
-          picture,
-          createdAt: new Date(),
-        };
-
-        await newUserRef.set(newUser);
-      } else {
-        const userDoc = userQuery.docs[0];
-        userId = userDoc.id;
-        console.log(`✅ Usuario encontrado: ${userId}`);
-      }
-
-      console.log("🔑 Generando token de acceso...");
-      console.log(client);
-
-      // 🔹 Generar JWT para el usuario
-      const jwtToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, {
-        expiresIn: "7d",
-      });
-
-      return jwtToken;
+      payload = ticket.getPayload();
     } catch (error) {
-      console.error("Error en loginWithGoogle:", error);
-      throw new Error("Error al autenticar con Google");
+      console.error("Error verificando idToken de Google:", error);
+      throw new AuthError("Token de Google inválido o expirado", 401);
     }
+
+    if (!payload || !payload.email) {
+      throw new AuthError(
+        "Token no contiene información válida del usuario",
+        401,
+      );
+    }
+
+    const { email, name, picture } = payload;
+    console.log("Usuario autenticado:", email);
+
+    // 🔹 Buscar o crear usuario usando el repositorio
+    let user = await this.userRepository.findOne({ email });
+    let userId: string;
+
+    if (!user) {
+      console.log("⚠️ Usuario no encontrado, creando uno nuevo...");
+      const newUser: User = {
+        id: "",
+        email,
+        name: name || "",
+        picture: picture || undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+      user = await this.userRepository.create(newUser);
+      userId = user.id;
+    } else {
+      userId = user.id;
+      console.log(`✅ Usuario encontrado: ${userId}`);
+
+      // Actualizar picture si cambió
+      if (picture && picture !== user.picture) {
+        await this.userRepository.update(userId, {
+          picture,
+          updatedAt: new Date(),
+        });
+      }
+    }
+
+    console.log("🔑 Generando token de acceso...");
+
+    // 🔹 Generar JWT para el usuario
+    const jwtToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, {
+      expiresIn: "7d",
+    });
+
+    return jwtToken;
   }
 }
