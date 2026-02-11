@@ -58,7 +58,7 @@ export class TransactionController {
       const updatedData = req.body;
       const updatedTransaction = await this.service.update(
         transactionId,
-        updatedData
+        updatedData,
       );
 
       if (!updatedTransaction) {
@@ -101,7 +101,7 @@ export class TransactionController {
 
   importBankTransactions = async (
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> => {
     try {
       const userId = req.user?.userId; // 📌 Ahora el `userId` viene del JWT
@@ -111,10 +111,19 @@ export class TransactionController {
         return;
       }
 
-      await this.service.fetchBankEmails(userId); // 🔹 Pasar userId al servicio
-      res
-        .status(200)
-        .json({ message: "Transacciones importadas exitosamente" });
+      const { importedCount } = await this.service.fetchBankEmails(userId);
+
+      // 🔹 Verificar transacciones huérfanas (sin período de facturación)
+      const { orphanedTransactions, suggestedPeriod } =
+        await this.service.checkOrphanedTransactions();
+
+      res.status(200).json({
+        message: "Transacciones importadas exitosamente",
+        importedCount,
+        orphanedCount: orphanedTransactions.length,
+        orphanedTransactions: orphanedTransactions.slice(0, 5), // Limitar a 5 para la respuesta
+        suggestedPeriod,
+      });
     } catch (error) {
       console.error("Error importing transactions:", error);
       res.status(500).json({
@@ -127,7 +136,7 @@ export class TransactionController {
 
   initializeQuotasForAllTransactions = async (
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> => {
     const { creditCardId } = req.params; // Obtener userId y creditCardId de la URL
 
@@ -140,7 +149,7 @@ export class TransactionController {
     } catch (error) {
       console.error(
         "❌ Error al inicializar cuotas para todas las transacciones:",
-        error
+        error,
       );
       res.status(500).json({
         message: "❌ Error al inicializar cuotas para todas las transacciones",
@@ -156,14 +165,13 @@ export class TransactionController {
     const { creditCardId } = req.params;
 
     try {
-      const monthlyQuotaSum = await this.service.getMonthlyQuotaSum(
-        creditCardId
-      );
+      const monthlyQuotaSum =
+        await this.service.getMonthlyQuotaSum(creditCardId);
       res.status(200).json(monthlyQuotaSum);
     } catch (error) {
       console.error(
         "❌ Error al obtener la sumatoria de cuotas por mes:",
-        error
+        error,
       );
       res.status(500).json({
         message: "❌ Error al obtener la sumatoria de cuotas por mes",

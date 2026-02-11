@@ -29,7 +29,7 @@ export class TransactionService extends BaseService<Transaction> {
   }
 
   // Otros métodos específicos del servicio
-  async fetchBankEmails(userId: string): Promise<void> {
+  async fetchBankEmails(userId: string): Promise<{ importedCount: number }> {
     console.warn(`🔍 Buscando emailToken para el usuario: ${userId}`);
 
     // 🔹 Verificar si ya hay un token guardado en Firestore
@@ -113,12 +113,13 @@ export class TransactionService extends BaseService<Transaction> {
 
       if (newMessageIds.length === 0) {
         console.warn("No hay nuevos correos para procesar.");
-        return;
+        return { importedCount: 0 };
       }
 
       console.warn(`Procesando ${newMessageIds.length} nuevos correos`);
       const chunks = chunkArray(newMessageIds, 100);
       let batchData: Transaction[] = [];
+      let totalImported = 0;
 
       for (const chunk of chunks) {
         await Promise.all(
@@ -171,13 +172,138 @@ export class TransactionService extends BaseService<Transaction> {
 
         console.log("Batch data:", batchData);
         if (batchData.length > 0) {
+          totalImported += batchData.length;
           await this.repository.saveBatch(batchData);
           batchData = [];
         }
       }
+      return { importedCount: totalImported };
     } else {
       console.warn("No se encontraron correos de transacciones para este mes.");
     }
+    return { importedCount: 0 };
+  }
+
+  /**
+   * Detecta transacciones que no caen dentro de ningún período de facturación
+   * y sugiere el siguiente período basado en el patrón existente.
+   */
+  async checkOrphanedTransactions(): Promise<{
+    orphanedTransactions: Transaction[];
+    suggestedPeriod: {
+      month: string;
+      startDate: string;
+      endDate: string;
+    } | null;
+  }> {
+    const billingPeriods = await this.billingPeriodRepository.findAll();
+    const transactions = await this.repository.findAll();
+
+    if (!transactions.length) {
+      return { orphanedTransactions: [], suggestedPeriod: null };
+    }
+
+    // Convertir fechas de billing periods
+    const formattedPeriods = billingPeriods.map((period) => ({
+      startDate: new Date(
+        convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss"),
+      ),
+      endDate: new Date(
+        convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss"),
+      ),
+    }));
+
+    // Encontrar transacciones huérfanas
+    const orphanedTransactions = transactions.filter((tx) => {
+      if (!tx.transactionDate) return false;
+      const txDate = new Date(
+        convertUtcToChileTime(tx.transactionDate, "yyyy-MM-dd HH:mm:ss"),
+      );
+      return !formattedPeriods.some(
+        (period) => txDate >= period.startDate && txDate <= period.endDate,
+      );
+    });
+
+    // Sugerir siguiente período basado en el patrón existente
+    let suggestedPeriod: {
+      month: string;
+      startDate: string;
+      endDate: string;
+    } | null = null;
+
+    if (billingPeriods.length > 0) {
+      // Tomar el período más reciente (ya vienen ordenados desc por startDate)
+      const latestPeriod = billingPeriods[0];
+      const latestStart = new Date(
+        convertUtcToChileTime(latestPeriod.startDate, "yyyy-MM-dd"),
+      );
+      const latestEnd = new Date(
+        convertUtcToChileTime(latestPeriod.endDate, "yyyy-MM-dd"),
+      );
+
+      // Calcular la duración del período en días para detectar el patrón
+      const nextStart = new Date(latestEnd);
+      nextStart.setDate(nextStart.getDate() + 1);
+
+      const nextEnd = new Date(nextStart);
+      // Mantener la misma duración relativa (avanzar un mes)
+      nextEnd.setMonth(nextEnd.getMonth() + 1);
+      nextEnd.setDate(nextEnd.getDate() - 1);
+
+      const monthNames = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
+      const monthName = monthNames[nextStart.getMonth()];
+      const year = nextStart.getFullYear();
+
+      suggestedPeriod = {
+        month: `${monthName} ${year}`,
+        startDate: nextStart.toISOString(),
+        endDate: nextEnd.toISOString(),
+      };
+    } else if (orphanedTransactions.length > 0) {
+      // Si no hay períodos, sugerir basado en la primera transacción huérfana
+      const firstOrphan = orphanedTransactions[0];
+      const txDate = new Date(
+        convertUtcToChileTime(firstOrphan.transactionDate, "yyyy-MM-dd"),
+      );
+      const startDate = new Date(txDate.getFullYear(), txDate.getMonth(), 1);
+      const endDate = new Date(txDate.getFullYear(), txDate.getMonth() + 1, 0);
+
+      const monthNames = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
+
+      suggestedPeriod = {
+        month: `${monthNames[startDate.getMonth()]} ${startDate.getFullYear()}`,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+    }
+
+    return { orphanedTransactions, suggestedPeriod };
   }
 
   // Función recursiva para buscar contenido HTML o texto plano en partes anidadas
