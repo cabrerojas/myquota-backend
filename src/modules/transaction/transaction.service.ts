@@ -234,9 +234,6 @@ export class TransactionService extends BaseService<Transaction> {
     if (billingPeriods.length > 0) {
       // Tomar el período más reciente (ya vienen ordenados desc por startDate)
       const latestPeriod = billingPeriods[0];
-      const latestStart = new Date(
-        convertUtcToChileTime(latestPeriod.startDate, "yyyy-MM-dd"),
-      );
       const latestEnd = new Date(
         convertUtcToChileTime(latestPeriod.endDate, "yyyy-MM-dd"),
       );
