@@ -1,10 +1,25 @@
 // src/shared/classes/firestore.repository.ts
+import { Timestamp } from '@google-cloud/firestore';
 import { RepositoryError } from '../errors/custom.error';
 import { IBaseEntity, IBaseRepository } from '../interfaces/base.repository';
 import { db } from '@/config/firebase';
 
 export class FirestoreRepository<T extends IBaseEntity> implements IBaseRepository<T> {
   public repository: FirebaseFirestore.CollectionReference<T>;
+
+  /**
+   * Convierte Firestore Timestamps a Date nativas para que
+   * JSON.stringify() los serialice como ISO strings.
+   */
+  protected sanitizeTimestamps(data: T): T {
+    const sanitized = { ...data };
+    for (const [key, value] of Object.entries(sanitized)) {
+      if (value instanceof Timestamp) {
+        (sanitized as Record<string, unknown>)[key] = value.toDate();
+      }
+    }
+    return sanitized;
+  }
 
   constructor(path: string[], collectionName: string) {
     if (!collectionName) {
@@ -91,7 +106,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       }
 
       const snapshot = await query.get();
-      return snapshot.docs.map((doc) => doc.data());
+      return snapshot.docs.map((doc) => this.sanitizeTimestamps(doc.data()));
     } catch (error) {
       console.error("Error in FirestoreRepository.findAll:", error);
       throw new RepositoryError(`Error finding entities: ${error}`, 500);
@@ -121,7 +136,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
         return null;
       }
 
-      return doc.data() as T;
+      return this.sanitizeTimestamps(doc.data() as T);
     } catch (error) {
       console.error("❌ Error en FirestoreRepository.findById:", error);
       throw new RepositoryError("Error find entity by id", 500);
@@ -144,7 +159,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       if (snapshot.empty) {
         return null;
       }
-      return snapshot.docs[0].data();
+      return this.sanitizeTimestamps(snapshot.docs[0].data());
     } catch (error) {
       console.error("Error in FirestoreRepository.findOne:", error);
       throw new RepositoryError("Error finding one entity", 500);
