@@ -20,7 +20,7 @@ export class TransactionService extends BaseService<Transaction> {
 
   constructor(
     repository: TransactionRepository,
-    billingPeriodRepository: BillingPeriodRepository
+    billingPeriodRepository: BillingPeriodRepository,
   ) {
     super(repository);
     // Guardar la referencia al repository tipado
@@ -37,26 +37,52 @@ export class TransactionService extends BaseService<Transaction> {
 
     if (!tokenData) {
       throw new Error(
-        "❌ No se encontró un token. Conéctate con Gmail nuevamente."
+        "❌ No se encontró un token. Conéctate con Gmail nuevamente.",
       );
     }
 
     console.log(tokenData);
 
-    // 🔹 Verificar si el token ha expirado
-    if (new Date().getTime() > tokenData.expiryDate) {
-      throw new Error(
-        "❌ El token de Gmail ha expirado. Conéctate con Gmail nuevamente."
-      );
-    }
-
     // 🔹 Crear cliente OAuth con el token guardado
-    const auth: Auth.OAuth2Client = new google.auth.OAuth2();
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const auth: Auth.OAuth2Client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+    );
     auth.setCredentials({
       access_token: tokenData.accessToken,
       refresh_token: tokenData.refreshToken,
       expiry_date: tokenData.expiryDate,
     });
+
+    // 🔹 Si el token expiró, intentar renovar con refresh_token
+    if (new Date().getTime() > tokenData.expiryDate) {
+      console.log("🔄 Token expirado, renovando con refresh_token...");
+      if (!tokenData.refreshToken) {
+        throw new Error(
+          "❌ El token de Gmail ha expirado y no hay refresh_token. Conéctate nuevamente.",
+        );
+      }
+      try {
+        const { credentials } = await auth.refreshAccessToken();
+        auth.setCredentials(credentials);
+
+        // Guardar los nuevos tokens en Firestore
+        const { saveTokenToFirestore } = await import("../../config/gmailAuth");
+        await saveTokenToFirestore(userId, {
+          access_token: credentials.access_token,
+          refresh_token: credentials.refresh_token || tokenData.refreshToken,
+          expiry_date: credentials.expiry_date,
+        });
+        console.log("✅ Token de Gmail renovado y guardado");
+      } catch (refreshError) {
+        console.error("❌ Error renovando token de Gmail:", refreshError);
+        throw new Error(
+          "❌ No se pudo renovar el token de Gmail. Conéctate nuevamente.",
+        );
+      }
+    }
 
     const gmail = google.gmail({ version: "v1", auth });
 
@@ -75,15 +101,14 @@ export class TransactionService extends BaseService<Transaction> {
     if (res.data.messages) {
       const messageIds = res.data.messages.map((message) => message.id!);
       console.log("Message IDs:", messageIds);
-      const existingIds = await this.repository.getExistingTransactionIds(
-        messageIds
-      );
+      const existingIds =
+        await this.repository.getExistingTransactionIds(messageIds);
       console.log(
         "Existing IDs#####################################:",
-        existingIds
+        existingIds,
       );
       const newMessageIds = messageIds.filter(
-        (id) => !existingIds.includes(id)
+        (id) => !existingIds.includes(id),
       );
 
       if (newMessageIds.length === 0) {
@@ -111,7 +136,7 @@ export class TransactionService extends BaseService<Transaction> {
 
             if (encodedMessage) {
               const content = Buffer.from(encodedMessage, "base64").toString(
-                "utf8"
+                "utf8",
               );
               const {
                 amount,
@@ -141,7 +166,7 @@ export class TransactionService extends BaseService<Transaction> {
                 batchData.push(transactionData);
               }
             }
-          })
+          }),
         );
 
         console.log("Batch data:", batchData);
@@ -157,7 +182,7 @@ export class TransactionService extends BaseService<Transaction> {
 
   // Función recursiva para buscar contenido HTML o texto plano en partes anidadas
   private findHtmlOrPlainText(
-    part: gmail_v1.Schema$MessagePart
+    part: gmail_v1.Schema$MessagePart,
   ): string | null | undefined {
     // Busca contenido HTML o texto plano directamente
     if (part.mimeType === "text/html" || part.mimeType === "text/plain") {
@@ -186,7 +211,7 @@ export class TransactionService extends BaseService<Transaction> {
 
     // Detectar la moneda y el monto
     const amountMatch = textContent.match(
-      /(?:US\$|CLP\$|\$)(\d{1,64}(?:[.,]\d{3})*(?:[.,]\d{2})?)/
+      /(?:US\$|CLP\$|\$)(\d{1,64}(?:[.,]\d{3})*(?:[.,]\d{2})?)/,
     );
     const currency = textContent.includes("US$") ? "Dolar" : "CLP";
 
@@ -199,7 +224,7 @@ export class TransactionService extends BaseService<Transaction> {
 
     // Extraer otros datos
     const lastDigitsMatch = textContent.match(
-      /Tarjeta de Crédito \*\*\*\*(\d{4})/
+      /Tarjeta de Crédito \*\*\*\*(\d{4})/,
     );
     const merchantMatch = textContent.match(/en (.+?) el \d{2}\/\d{2}\/\d{4}/);
     const dateMatch = textContent.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/);
@@ -217,7 +242,7 @@ export class TransactionService extends BaseService<Transaction> {
 
   async initializeQuotasForAllTransactions(creditCardId: string) {
     console.log(
-      `📌 Inicializando cuotas para la tarjeta de crédito: ${creditCardId}`
+      `📌 Inicializando cuotas para la tarjeta de crédito: ${creditCardId}`,
     );
 
     // Obtener todas las transacciones de la tarjeta de crédito
@@ -234,18 +259,18 @@ export class TransactionService extends BaseService<Transaction> {
     const existingQuotas = await Promise.all(
       transactions.map(async (transaction) => {
         return await this.repository.getQuotas(creditCardId, transaction.id);
-      })
+      }),
     );
 
     // Aplanar el array de cuotas existentes
     const allExistingQuotas = existingQuotas.flat();
     const existingQuotaIds = new Set(
-      allExistingQuotas.map((quota) => quota.transactionId)
+      allExistingQuotas.map((quota) => quota.transactionId),
     );
 
     // Filtrar las transacciones que no tienen cuotas creadas
     const transactionsWithoutQuotas = transactions.filter(
-      (transaction) => !existingQuotaIds.has(transaction.id)
+      (transaction) => !existingQuotaIds.has(transaction.id),
     );
 
     if (!transactionsWithoutQuotas.length) {
@@ -254,7 +279,7 @@ export class TransactionService extends BaseService<Transaction> {
     }
 
     console.log(
-      `📌 Se crearán cuotas para ${transactionsWithoutQuotas.length} transacciones.`
+      `📌 Se crearán cuotas para ${transactionsWithoutQuotas.length} transacciones.`,
     );
 
     // Crear cuotas en paralelo usando Promise.all
@@ -275,13 +300,13 @@ export class TransactionService extends BaseService<Transaction> {
         // Crear la cuota para la transacción
         await this.repository.addQuota(creditCardId, transaction.id, quotaData);
         console.warn(
-          `✅ Cuota creada para la transacción con ID ${transaction.id}`
+          `✅ Cuota creada para la transacción con ID ${transaction.id}`,
         );
-      })
+      }),
     );
 
     console.warn(
-      `✅ Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`
+      `✅ Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`,
     );
   }
 
@@ -289,11 +314,11 @@ export class TransactionService extends BaseService<Transaction> {
    * 🔹 Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
    */
   async getMonthlyQuotaSum(
-    creditCardId: string
+    creditCardId: string,
   ): Promise<{ period: string; currency: string; totalAmount: number }[]> {
     try {
       console.warn(
-        `📌 Obteniendo sumatoria de cuotas por período de facturación para la tarjeta ${creditCardId}...`
+        `📌 Obteniendo sumatoria de cuotas por período de facturación para la tarjeta ${creditCardId}...`,
       );
 
       // 🔹 Obtener los períodos de facturación de la tarjeta
@@ -307,13 +332,13 @@ export class TransactionService extends BaseService<Transaction> {
       const formattedBillingPeriods = billingPeriods.map((period) => ({
         periodKey: `${convertUtcToChileTime(
           period.startDate,
-          "yyyy-MM-dd"
+          "yyyy-MM-dd",
         )} - ${convertUtcToChileTime(period.endDate, "yyyy-MM-dd")}`,
         startDate: new Date(
-          convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss")
+          convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss"),
         ),
         endDate: new Date(
-          convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss")
+          convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss"),
         ),
       }));
 
@@ -330,7 +355,7 @@ export class TransactionService extends BaseService<Transaction> {
       const quotas = await Promise.all(
         transactions.map(async (transaction) => {
           return await this.repository.getQuotas(creditCardId, transaction.id);
-        })
+        }),
       );
 
       // 🔹 Aplanar el array de cuotas
@@ -349,7 +374,7 @@ export class TransactionService extends BaseService<Transaction> {
           if (!quota.due_date) return false;
 
           const quotaDate = new Date(
-            convertUtcToChileTime(quota.due_date, "yyyy-MM-dd HH:mm:ss")
+            convertUtcToChileTime(quota.due_date, "yyyy-MM-dd HH:mm:ss"),
           );
 
           return (
@@ -374,14 +399,14 @@ export class TransactionService extends BaseService<Transaction> {
             period,
             currency,
             totalAmount,
-          }))
+          })),
       );
 
       return periodSumArray;
     } catch (error) {
       console.error(
         "❌ Error al obtener la sumatoria de las cuotas por período de facturación:",
-        error
+        error,
       );
       throw error;
     }

@@ -7,14 +7,17 @@ export class AuthController {
 
   loginWithGoogle = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { token } = req.body;
+      const { token, serverAuthCode } = req.body;
       if (!token) {
         res.status(400).json({ message: "Token no proporcionado" });
         return;
       }
 
-      // 🔹 Enviar el idToken al servicio para validarlo y generar un JWT
-      const jwtToken = await this.service.loginWithGoogle(token);
+      // 🔹 Enviar el idToken y serverAuthCode al servicio
+      const jwtToken = await this.service.loginWithGoogle(
+        token,
+        serverAuthCode,
+      );
 
       res.status(200).json({ token: jwtToken });
     } catch (error) {
