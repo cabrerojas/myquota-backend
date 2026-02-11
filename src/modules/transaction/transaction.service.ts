@@ -261,8 +261,8 @@ export class TransactionService extends BaseService<Transaction> {
         "Noviembre",
         "Diciembre",
       ];
-      const monthName = monthNames[nextStart.getMonth()];
-      const year = nextStart.getFullYear();
+      const monthName = monthNames[nextEnd.getMonth()];
+      const year = nextEnd.getFullYear();
 
       suggestedPeriod = {
         month: `${monthName} ${year}`,
