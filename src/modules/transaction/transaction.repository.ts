@@ -1,32 +1,22 @@
-import { FirestoreRepository } from '@/shared/classes/firestore.repository';
-import { Transaction } from './transaction.model';
-import { chunkArray } from '@/shared/utils/array.utils';
-import { CreditCardRepository } from '@/modules/creditCard/creditCard.repository';
-import { Quota } from '@/modules/quota/quota.model';
+import { FirestoreRepository } from "@/shared/classes/firestore.repository";
+import { Transaction } from "./transaction.model";
+import { chunkArray } from "@/shared/utils/array.utils";
+import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import { Quota } from "@/modules/quota/quota.model";
 
 export class TransactionRepository extends FirestoreRepository<Transaction> {
   private creditCardRepository: CreditCardRepository;
 
   constructor(userId: string, creditCardId: string) {
-    super(
-      [
-        "users",
-        userId,
-        "creditCards",
-        creditCardId
-      ],
-      "transactions"
-    );
+    super(["users", userId, "creditCards", creditCardId], "transactions");
 
     this.creditCardRepository = new CreditCardRepository(userId);
   }
 
-
-
   // Obtener la referencia a la subcolección de cuotas dentro de la subcolección de transacciones de una tarjeta de crédito
   getQuotasCollection(
     creditCardId: string,
-    transactionId: string
+    transactionId: string,
   ): FirebaseFirestore.CollectionReference<Quota> {
     return this.creditCardRepository.repository
       .doc(creditCardId)
@@ -39,26 +29,28 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
   async addQuota(
     creditCardId: string,
     transactionId: string,
-    quota: Quota
+    quota: Quota,
   ): Promise<void> {
     if (!quota.id) {
-      quota.id = this.repository.doc().id; // Generar un ID único si no existe
+      quota.id = this.repository.doc().id;
     }
     const quotasCollection = this.getQuotasCollection(
       creditCardId,
-      transactionId
+      transactionId,
     );
-    await quotasCollection.doc(quota.id).set(quota);
+    await quotasCollection
+      .doc(quota.id)
+      .set(this.datesToIsoStrings(quota) as Quota);
   }
 
   // Obtener todas las cuotas de la subcolección
   async getQuotas(
     creditCardId: string,
-    transactionId: string
+    transactionId: string,
   ): Promise<Quota[]> {
     const quotasCollection = this.getQuotasCollection(
       creditCardId,
-      transactionId
+      transactionId,
     );
     const snapshot = await quotasCollection
       .where("deletedAt", "==", null)
@@ -81,12 +73,12 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
             .where("deletedAt", "==", null)
             .get();
           creditCardTransactionIds.push(
-            ...transactionSnapshot.docs.map((doc) => doc.id)
+            ...transactionSnapshot.docs.map((doc) => doc.id),
           );
         }
 
         return creditCardTransactionIds;
-      })
+      }),
     );
     return results.flat();
   }
@@ -105,18 +97,18 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
             transaction.creditCardId = creditCard.id; // Establece el creditCardId
             await this.creditCardRepository.addTransaction(
               creditCard.id,
-              transaction
+              transaction,
             );
           }
-        })
+        }),
       );
       console.warn(
-        `Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`
+        `Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`,
       );
     } catch (error) {
       console.error(
         "Error al guardar el lote de transacciones en Firestore:",
-        error
+        error,
       );
       throw error; // Propaga el error para manejo en niveles superiores
     }

@@ -1,24 +1,45 @@
 // src/shared/classes/firestore.repository.ts
-import { Timestamp } from '@google-cloud/firestore';
-import { RepositoryError } from '../errors/custom.error';
-import { IBaseEntity, IBaseRepository } from '../interfaces/base.repository';
-import { db } from '@/config/firebase';
+import { Timestamp } from "@google-cloud/firestore";
+import { RepositoryError } from "../errors/custom.error";
+import { IBaseEntity, IBaseRepository } from "../interfaces/base.repository";
+import { db } from "@/config/firebase";
 
-export class FirestoreRepository<T extends IBaseEntity> implements IBaseRepository<T> {
+export class FirestoreRepository<
+  T extends IBaseEntity,
+> implements IBaseRepository<T> {
   public repository: FirebaseFirestore.CollectionReference<T>;
 
   /**
-   * Convierte Firestore Timestamps a Date nativas para que
-   * JSON.stringify() los serialice como ISO strings.
+   * Al leer de Firestore, convierte Timestamps y Dates a ISO strings
+   * para que el JSON de la API siempre envíe strings legibles.
    */
   protected sanitizeTimestamps(data: T): T {
     const sanitized = { ...data };
     for (const [key, value] of Object.entries(sanitized)) {
       if (value instanceof Timestamp) {
-        (sanitized as Record<string, unknown>)[key] = value.toDate();
+        (sanitized as Record<string, unknown>)[key] = value
+          .toDate()
+          .toISOString();
+      } else if (value instanceof Date) {
+        (sanitized as Record<string, unknown>)[key] = value.toISOString();
       }
     }
     return sanitized;
+  }
+
+  /**
+   * Convierte todos los campos Date a ISO strings antes de escribir
+   * en Firestore, evitando que Firestore los convierta a Timestamps.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected datesToIsoStrings(data: Record<string, any>): Record<string, any> {
+    const converted = { ...data };
+    for (const [key, value] of Object.entries(converted)) {
+      if (value instanceof Date) {
+        converted[key] = value.toISOString();
+      }
+    }
+    return converted;
   }
 
   constructor(path: string[], collectionName: string) {
@@ -32,10 +53,10 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
     if (!path.length) {
       console.warn(
         "⚠️ No se recibió un path, inicializando colección raíz:",
-        collectionName
+        collectionName,
       );
       this.repository = db.collection(
-        collectionName
+        collectionName,
       ) as FirebaseFirestore.CollectionReference<T>;
     } else {
       let ref:
@@ -48,10 +69,10 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       for (let i = 2; i < path.length; i += 2) {
         if (!path[i + 1]) {
           console.error(
-            `❌ Error: El path está incompleto en la posición ${i}`
+            `❌ Error: El path está incompleto en la posición ${i}`,
           );
           throw new Error(
-            `❌ Error en el path: Se esperaba otro segmento después de ${path[i]}`
+            `❌ Error en el path: Se esperaba otro segmento después de ${path[i]}`,
           );
         }
         ref = ref.collection(path[i]).doc(path[i + 1]);
@@ -60,30 +81,30 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       // 🔹 La colección final es `collectionName` dentro del documento
       console.log("✅ Documento Referencia Final:", ref.path);
       this.repository = ref.collection(
-        collectionName
+        collectionName,
       ) as FirebaseFirestore.CollectionReference<T>;
     }
   }
 
   async create(
-    data: Omit<T, keyof IBaseEntity> & Partial<IBaseEntity>
+    data: Omit<T, keyof IBaseEntity> & Partial<IBaseEntity>,
   ): Promise<T> {
     if (!data) {
       throw new RepositoryError("Data to create entity is required", 400);
     }
 
     const now = new Date();
-    const id = data.id || this.repository.doc().id; // Usa data.id si existe, de lo contrario genera un nuevo ID
+    const id = data.id || this.repository.doc().id;
     const entity: T = {
       ...data,
       id,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
-    } as T; // Asegúrate de forzar el tipo correctamente
+    } as T;
 
     try {
-      await this.repository.doc(id).set(entity);
+      await this.repository.doc(id).set(this.datesToIsoStrings(entity) as T);
       return entity;
     } catch (error) {
       console.error("Error in FirestoreRepository.create:", error);
@@ -96,7 +117,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       let query: FirebaseFirestore.Query<T> = this.repository.where(
         "deletedAt",
         "==",
-        null
+        null,
       );
 
       if (filters) {
@@ -123,7 +144,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
         "📌 Buscando en la colección:",
         this.repository.path,
         "ID:",
-        id
+        id,
       );
 
       const docRef = this.repository.doc(id);
@@ -148,7 +169,7 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
       let query: FirebaseFirestore.Query<T> = this.repository.where(
         "deletedAt",
         "==",
-        null
+        null,
       );
 
       Object.entries(filters).forEach(([key, value]) => {
@@ -183,7 +204,9 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.repository.doc(id).update({ ...entity } as any);
+      await this.repository
+        .doc(id)
+        .update(this.datesToIsoStrings(entity) as any);
       return entity;
     } catch (error) {
       console.error("Error in FirestoreRepository.update:", error);
@@ -210,7 +233,9 @@ export class FirestoreRepository<T extends IBaseEntity> implements IBaseReposito
 
       entity.deletedAt = new Date();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.repository.doc(id).update({ ...entity } as any);
+      await this.repository
+        .doc(id)
+        .update(this.datesToIsoStrings(entity) as any);
       return true;
     } catch (error) {
       console.error("Error in FirestoreRepository.softDelete:", error);

@@ -1,8 +1,6 @@
-
-
-import { FirestoreRepository } from '@/shared/classes/firestore.repository';
-import { CreditCard } from './creditCard.model';
-import { Transaction } from '@/modules/transaction/transaction.model';
+import { FirestoreRepository } from "@/shared/classes/firestore.repository";
+import { CreditCard } from "./creditCard.model";
+import { Transaction } from "@/modules/transaction/transaction.model";
 
 export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   constructor(userId: string) {
@@ -17,18 +15,18 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   // Agregar una transacción a la subcolección
   async addTransaction(
     creditCardId: string,
-    transaction: Transaction
+    transaction: Transaction,
   ): Promise<void> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
     await transactionsCollection
       .doc(transaction.id)
-      .set(transaction, { merge: true });
+      .set(this.datesToIsoStrings(transaction), { merge: true });
   }
   // Obtener todas las transacciones de la subcolección
   async getTransactions(creditCardId: string): Promise<Transaction[]> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
     console.log(
-      `Obteniendo transacciones para la tarjeta de crédito con ID: ${creditCardId}`
+      `Obteniendo transacciones para la tarjeta de crédito con ID: ${creditCardId}`,
     );
 
     console.log(`transactionsCollection: ${transactionsCollection}`);
@@ -42,7 +40,7 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   }
   // Obtener el ID de la tarjeta de crédito a partir del ID de la transacción
   async getCreditCardIdByTransactionId(
-    transactionId: string
+    transactionId: string,
   ): Promise<string | null> {
     const snapshot = await this.repository.firestore
       .collectionGroup("transactions")
