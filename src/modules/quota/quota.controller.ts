@@ -1,5 +1,5 @@
-import { Request, Response } from 'express';
-import { QuotaService } from './quota.service';
+import { Request, Response } from "express";
+import { QuotaService } from "./quota.service";
 
 export class QuotaController {
   constructor(private readonly service: QuotaService) {}
@@ -78,16 +78,46 @@ export class QuotaController {
     }
   };
 
- 
   getQuotasByTransactionId = async (
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<void> => {
     const { creditCardId, transactionId } = req.params;
     const quotas = await this.service.getQuotasByTransaction(
       creditCardId,
-      transactionId
+      transactionId,
     );
     res.status(200).json(quotas);
+  };
+
+  splitQuotas = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { creditCardId, transactionId } = req.params;
+      const { numberOfQuotas } = req.body;
+
+      if (!numberOfQuotas || typeof numberOfQuotas !== "number") {
+        res.status(400).json({
+          message: "numberOfQuotas es requerido y debe ser un número",
+        });
+        return;
+      }
+
+      const result = await this.service.splitTransactionIntoQuotas(
+        creditCardId,
+        transactionId,
+        numberOfQuotas,
+      );
+
+      res.status(200).json({
+        message: `Transacción dividida en ${result.created} cuotas exitosamente`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Error splitting quotas:", error);
+      res.status(500).json({
+        message: "Error al dividir en cuotas",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   };
 }

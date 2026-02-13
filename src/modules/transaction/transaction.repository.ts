@@ -58,6 +58,22 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
     return snapshot.docs.map((doc) => doc.data() as Quota);
   }
 
+  // Eliminar todas las cuotas de una transacción (hard delete)
+  async deleteAllQuotas(
+    creditCardId: string,
+    transactionId: string,
+  ): Promise<number> {
+    const quotasCollection = this.getQuotasCollection(
+      creditCardId,
+      transactionId,
+    );
+    const snapshot = await quotasCollection.get();
+    const batch = this.creditCardRepository.repository.firestore.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    return snapshot.size;
+  }
+
   // Obtener IDs de transacciones existentes en Firestore y en CreditCard
   async getExistingTransactionIds(ids: string[]): Promise<string[]> {
     const chunks = chunkArray(ids, 10);
