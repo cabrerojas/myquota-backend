@@ -6,6 +6,7 @@ export class BillingPeriod implements IBaseEntity {
   month!: string;
   startDate!: Date;
   endDate!: Date;
+  dueDate!: Date;
   createdAt!: Date;
   updatedAt!: Date;
   deletedAt?: Date | null;

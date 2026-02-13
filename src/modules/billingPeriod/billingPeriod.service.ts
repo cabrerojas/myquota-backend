@@ -29,7 +29,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
    * - endDate → 23:59:59 hora Chile (guardado en UTC)
    */
   private normalizeDates<
-    D extends { startDate?: Date | string; endDate?: Date | string },
+    D extends { startDate?: Date | string; endDate?: Date | string; dueDate?: Date | string },
   >(data: D): D {
     const normalized = { ...data };
     if (normalized.startDate) {
@@ -40,6 +40,11 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     if (normalized.endDate) {
       (normalized as Record<string, unknown>).endDate = toChileEndOfDay(
         normalized.endDate,
+      );
+    }
+    if (normalized.dueDate) {
+      (normalized as Record<string, unknown>).dueDate = toChileEndOfDay(
+        normalized.dueDate,
       );
     }
     return normalized;
