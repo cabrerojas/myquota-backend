@@ -175,7 +175,10 @@ export class TransactionController {
       });
     } catch (error) {
       console.error("Error deleting manual transaction:", error);
-      const status = error instanceof Error && error.message.includes("Solo se pueden") ? 400 : 500;
+      const status =
+        error instanceof Error && error.message.includes("Solo se pueden")
+          ? 400
+          : 500;
       res.status(status).json({
         message: error instanceof Error ? error.message : "Error al eliminar",
       });
@@ -188,9 +191,24 @@ export class TransactionController {
   ): Promise<void> => {
     try {
       const { creditCardId, transactionId } = req.params;
-      const { merchant, purchaseDate, quotaAmount, totalInstallments, paidInstallments, lastPaidMonth, currency } = req.body;
+      const {
+        merchant,
+        purchaseDate,
+        quotaAmount,
+        totalInstallments,
+        paidInstallments,
+        lastPaidMonth,
+        currency,
+      } = req.body;
 
-      if (!merchant || !quotaAmount || !totalInstallments || paidInstallments === undefined || !lastPaidMonth || !currency) {
+      if (
+        !merchant ||
+        !quotaAmount ||
+        !totalInstallments ||
+        paidInstallments === undefined ||
+        !lastPaidMonth ||
+        !currency
+      ) {
         res.status(400).json({ message: "❌ Faltan campos requeridos." });
         return;
       }
@@ -198,7 +216,15 @@ export class TransactionController {
       const result = await this.service.updateManualTransaction(
         creditCardId,
         transactionId,
-        { merchant, purchaseDate, quotaAmount, totalInstallments, paidInstallments, lastPaidMonth, currency },
+        {
+          merchant,
+          purchaseDate,
+          quotaAmount,
+          totalInstallments,
+          paidInstallments,
+          lastPaidMonth,
+          currency,
+        },
       );
 
       res.status(200).json({
@@ -208,7 +234,10 @@ export class TransactionController {
       });
     } catch (error) {
       console.error("Error updating manual transaction:", error);
-      const status = error instanceof Error && error.message.includes("Solo se pueden") ? 400 : 500;
+      const status =
+        error instanceof Error && error.message.includes("Solo se pueden")
+          ? 400
+          : 500;
       res.status(status).json({
         message: error instanceof Error ? error.message : "Error al actualizar",
       });
@@ -224,7 +253,9 @@ export class TransactionController {
       res.status(200).json(transactions);
     } catch (error) {
       console.error("Error getting manual transactions:", error);
-      res.status(500).json({ message: "Error al obtener transacciones manuales" });
+      res
+        .status(500)
+        .json({ message: "Error al obtener transacciones manuales" });
     }
   };
 
