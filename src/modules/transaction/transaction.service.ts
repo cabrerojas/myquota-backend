@@ -363,7 +363,9 @@ export class TransactionService extends BaseService<Transaction> {
     return { amount, currency, cardLastDigits, merchant, transactionDate };
   }
 
-  async initializeQuotasForAllTransactions(creditCardId: string) {
+  async initializeQuotasForAllTransactions(
+    creditCardId: string,
+  ): Promise<number> {
     console.log(
       `📌 Inicializando cuotas para la tarjeta de crédito: ${creditCardId}`,
     );
@@ -373,7 +375,7 @@ export class TransactionService extends BaseService<Transaction> {
 
     if (!transactions.length) {
       console.warn("⚠️ No se encontraron transacciones para procesar.");
-      return;
+      return 0;
     }
 
     console.log(`📌 Se encontraron ${transactions.length} transacciones.`);
@@ -398,7 +400,7 @@ export class TransactionService extends BaseService<Transaction> {
 
     if (!transactionsWithoutQuotas.length) {
       console.warn("✅ Todas las transacciones ya tienen cuotas creadas.");
-      return;
+      return 0;
     }
 
     console.log(
@@ -431,6 +433,8 @@ export class TransactionService extends BaseService<Transaction> {
     console.warn(
       `✅ Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`,
     );
+
+    return transactionsWithoutQuotas.length;
   }
 
   /**

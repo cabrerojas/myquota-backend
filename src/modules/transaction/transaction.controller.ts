@@ -113,6 +113,14 @@ export class TransactionController {
 
       const { importedCount } = await this.service.fetchBankEmails(userId);
 
+      // 🔹 Auto-inicializar quotas para transacciones nuevas (1 quota por transacción)
+      const { creditCardId } = req.params;
+      let quotasCreated = 0;
+      if (importedCount > 0) {
+        quotasCreated =
+          await this.service.initializeQuotasForAllTransactions(creditCardId);
+      }
+
       // 🔹 Verificar transacciones huérfanas (sin período de facturación)
       const { orphanedTransactions, suggestedPeriod } =
         await this.service.checkOrphanedTransactions();
@@ -120,8 +128,9 @@ export class TransactionController {
       res.status(200).json({
         message: "Transacciones importadas exitosamente",
         importedCount,
+        quotasCreated,
         orphanedCount: orphanedTransactions.length,
-        orphanedTransactions: orphanedTransactions.slice(0, 5), // Limitar a 5 para la respuesta
+        orphanedTransactions: orphanedTransactions.slice(0, 5),
         suggestedPeriod,
       });
     } catch (error) {
@@ -141,10 +150,12 @@ export class TransactionController {
     const { creditCardId } = req.params; // Obtener userId y creditCardId de la URL
 
     try {
-      await this.service.initializeQuotasForAllTransactions(creditCardId);
+      const quotasCreated =
+        await this.service.initializeQuotasForAllTransactions(creditCardId);
       res.status(200).json({
         message:
           "✅ Cuotas creadas para todas las transacciones que no las tenían previamente.",
+        quotasCreated,
       });
     } catch (error) {
       console.error(
