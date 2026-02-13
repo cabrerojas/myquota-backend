@@ -106,4 +106,25 @@ export class BillingPeriodController {
       });
     }
   };
+
+  payBillingPeriod = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { creditCardId, billingPeriodId } = req.params;
+      const result = await this.service.payBillingPeriod(
+        creditCardId,
+        billingPeriodId,
+      );
+
+      res.status(200).json({
+        message: `${result.paidCount} cuotas marcadas como pagadas`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Error paying billing period:", error);
+      res.status(500).json({
+        message: "Error al pagar el período",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
 }

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { BillingPeriodController } from "./billingPeriod.controller";
 import { BillingPeriodRepository } from "./billingPeriod.repository";
 import { BillingPeriodService } from "./billingPeriod.service";
+import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { authenticate } from "@/shared/middlewares/auth.middleware"; // 📌 Middleware para validar JWT
 
 const createBillingPeriodRouter = (): Router => {
@@ -25,7 +26,8 @@ const createBillingPeriodRouter = (): Router => {
       try {
         // 📌 Crear repositorio con `userId` desde JWT
         const repository = new BillingPeriodRepository(userId, creditCardId);
-        const service = new BillingPeriodService(repository);
+        const transactionRepository = new TransactionRepository(userId, creditCardId);
+        const service = new BillingPeriodService(repository, transactionRepository);
         const controller = new BillingPeriodController(service);
 
         res.locals.billingPeriodController = controller;
@@ -70,6 +72,13 @@ const createBillingPeriodRouter = (): Router => {
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.deleteBillingPeriod(req, res);
+    }
+  );
+
+  router.post(
+    "/creditCards/:creditCardId/billingPeriods/:billingPeriodId/pay",
+    (req: Request, res: Response) => {
+      return res.locals.billingPeriodController.payBillingPeriod(req, res);
     }
   );
 
