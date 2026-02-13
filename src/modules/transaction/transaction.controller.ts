@@ -113,13 +113,10 @@ export class TransactionController {
 
       const { importedCount } = await this.service.fetchBankEmails(userId);
 
-      // 🔹 Auto-inicializar quotas para transacciones nuevas (1 quota por transacción)
+      // 🔹 Auto-inicializar quotas para transacciones que no las tengan (idempotente)
       const { creditCardId } = req.params;
-      let quotasCreated = 0;
-      if (importedCount > 0) {
-        quotasCreated =
-          await this.service.initializeQuotasForAllTransactions(creditCardId);
-      }
+      const quotasCreated =
+        await this.service.initializeQuotasForAllTransactions(creditCardId);
 
       // 🔹 Verificar transacciones huérfanas (sin período de facturación)
       const { orphanedTransactions, suggestedPeriod } =
