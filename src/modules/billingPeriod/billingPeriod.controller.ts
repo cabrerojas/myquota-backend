@@ -1,5 +1,5 @@
-import { Request, Response } from 'express';
-import { BillingPeriodService } from './billingPeriod.service';
+import { Request, Response } from "express";
+import { BillingPeriodService } from "./billingPeriod.service";
 
 export class BillingPeriodController {
   constructor(private readonly service: BillingPeriodService) {}
@@ -60,7 +60,7 @@ export class BillingPeriodController {
       const updatedData = req.body;
       const updatedBillingPeriod = await this.service.update(
         billingPeriodId,
-        updatedData
+        updatedData,
       );
 
       if (!updatedBillingPeriod) {
@@ -109,11 +109,8 @@ export class BillingPeriodController {
 
   payBillingPeriod = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { creditCardId, billingPeriodId } = req.params;
-      const result = await this.service.payBillingPeriod(
-        creditCardId,
-        billingPeriodId,
-      );
+      const { billingPeriodId } = req.params;
+      const result = await this.service.payBillingPeriod(billingPeriodId);
 
       res.status(200).json({
         message: `${result.paidCount} cuotas marcadas como pagadas`,

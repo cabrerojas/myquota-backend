@@ -17,7 +17,7 @@ const createBillingPeriodRouter = (): Router => {
       const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
 
       if (!userId || !creditCardId) {
-         res.status(400).json({
+        res.status(400).json({
           message: "❌ creditCardId es requerido en la URL.",
         });
         return;
@@ -26,8 +26,15 @@ const createBillingPeriodRouter = (): Router => {
       try {
         // 📌 Crear repositorio con `userId` desde JWT
         const repository = new BillingPeriodRepository(userId, creditCardId);
-        const transactionRepository = new TransactionRepository(userId, creditCardId);
-        const service = new BillingPeriodService(repository, transactionRepository);
+        const transactionRepository = new TransactionRepository(
+          userId,
+          creditCardId,
+        );
+        const service = new BillingPeriodService(
+          repository,
+          transactionRepository,
+          creditCardId,
+        );
         const controller = new BillingPeriodController(service);
 
         res.locals.billingPeriodController = controller;
@@ -36,7 +43,7 @@ const createBillingPeriodRouter = (): Router => {
         console.error("❌ Error en el middleware de BillingPeriod:", error);
         res.status(500).json({ message: "❌ Error interno en BillingPeriod." });
       }
-    }
+    },
   );
 
   // 📌 Definir rutas usando `res.locals.billingPeriodController`
@@ -44,42 +51,42 @@ const createBillingPeriodRouter = (): Router => {
     "/creditCards/:creditCardId/billingPeriods",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.getBillingPeriods(req, res);
-    }
+    },
   );
 
   router.post(
     "/creditCards/:creditCardId/billingPeriods",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.addBillingPeriod(req, res);
-    }
+    },
   );
 
   router.get(
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.getBillingPeriod(req, res);
-    }
+    },
   );
 
   router.put(
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.updateBillingPeriod(req, res);
-    }
+    },
   );
 
   router.delete(
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.deleteBillingPeriod(req, res);
-    }
+    },
   );
 
   router.post(
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId/pay",
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.payBillingPeriod(req, res);
-    }
+    },
   );
 
   return router;

@@ -8,10 +8,16 @@ import { TransactionRepository } from "@/modules/transaction/transaction.reposit
 export class BillingPeriodService extends BaseService<BillingPeriod> {
   protected repository: BillingPeriodRepository;
   private transactionRepository: TransactionRepository | null = null;
+  private creditCardId: string;
 
-  constructor(repository: BillingPeriodRepository, transactionRepository?: TransactionRepository) {
+  constructor(
+    repository: BillingPeriodRepository,
+    transactionRepository?: TransactionRepository,
+    creditCardId?: string,
+  ) {
     super(repository);
     this.repository = repository;
+    this.creditCardId = creditCardId || "";
     if (transactionRepository) {
       this.transactionRepository = transactionRepository;
     }
@@ -57,7 +63,6 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
    * cae dentro del rango del período de facturación.
    */
   async payBillingPeriod(
-    creditCardId: string,
     billingPeriodId: string,
   ): Promise<{ paidCount: number; totalAmount: number }> {
     if (!this.transactionRepository) {
@@ -83,7 +88,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     // Para cada transacción, buscar cuotas pendientes en el rango
     for (const tx of transactions) {
       const quotas = await this.transactionRepository.getQuotas(
-        creditCardId,
+        this.creditCardId,
         tx.id,
       );
 
@@ -96,7 +101,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
       // Marcar cada cuota como pagada
       for (const quota of pendingInRange) {
         const quotaRef = this.transactionRepository
-          .getQuotasCollection(creditCardId, tx.id)
+          .getQuotasCollection(this.creditCardId, tx.id)
           .doc(quota.id);
         await quotaRef.update({
           status: "paid",
