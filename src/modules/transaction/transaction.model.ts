@@ -1,5 +1,4 @@
-
-import { IBaseEntity } from '@/shared/interfaces/base.repository';
+import { IBaseEntity } from "@/shared/interfaces/base.repository";
 
 export class Transaction implements IBaseEntity {
   id!: string;
@@ -15,4 +14,8 @@ export class Transaction implements IBaseEntity {
   updatedAt!: Date;
   deletedAt!: Date | null;
   creditCardId!: string;
+  // Campos para transacciones manuales
+  source?: "email" | "manual";
+  totalInstallments?: number;
+  paidInstallments?: number;
 }

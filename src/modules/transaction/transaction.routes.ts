@@ -17,7 +17,7 @@ const createTransactionRouter = (): Router => {
       const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
 
       if (!userId || !creditCardId) {
-         res.status(400).json({
+        res.status(400).json({
           message: "❌ creditCardId es requerido en la URL.",
         });
         return;
@@ -27,15 +27,15 @@ const createTransactionRouter = (): Router => {
         // 📌 Crear repositorios con `userId` desde JWT
         const transactionRepository = new TransactionRepository(
           userId,
-          creditCardId
+          creditCardId,
         );
         const billingPeriodRepository = new BillingPeriodRepository(
           userId,
-          creditCardId
+          creditCardId,
         );
         const service = new TransactionService(
           transactionRepository,
-          billingPeriodRepository
+          billingPeriodRepository,
         );
         const controller = new TransactionController(service);
 
@@ -48,7 +48,7 @@ const createTransactionRouter = (): Router => {
           message: "❌ Error interno en la configuración de Transaction.",
         });
       }
-    }
+    },
   );
 
   // 📌 Definir rutas usando `res.locals.transactionController`
@@ -56,42 +56,49 @@ const createTransactionRouter = (): Router => {
     "/creditCards/:creditCardId/transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransactions(req, res);
-    }
+    },
   );
 
   router.post(
     "/creditCards/:creditCardId/transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.addTransaction(req, res);
-    }
+    },
+  );
+
+  router.post(
+    "/creditCards/:creditCardId/transactions/manual",
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.createManualTransaction(req, res);
+    },
   );
 
   router.get(
     "/creditCards/:creditCardId/transactions/monthly-sum",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getMonthlyQuotaSum(req, res);
-    }
+    },
   );
 
   router.get(
     "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransaction(req, res);
-    }
+    },
   );
 
   router.put(
     "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.updateTransaction(req, res);
-    }
+    },
   );
 
   router.delete(
     "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.deleteTransaction(req, res);
-    }
+    },
   );
 
   router.post(
@@ -99,16 +106,16 @@ const createTransactionRouter = (): Router => {
     (req: Request, res: Response) => {
       return res.locals.transactionController.initializeQuotasForAllTransactions(
         req,
-        res
+        res,
       );
-    }
+    },
   );
 
   router.post(
     "/creditCards/:creditCardId/transactions/import-bank-transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.importBankTransactions(req, res);
-    }
+    },
   );
 
   return router;

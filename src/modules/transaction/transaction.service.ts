@@ -363,6 +363,80 @@ export class TransactionService extends BaseService<Transaction> {
     return { amount, currency, cardLastDigits, merchant, transactionDate };
   }
 
+  /**
+   * Crea una transacción manual con todas sus cuotas (pagadas y pendientes).
+   */
+  async createManualTransaction(
+    creditCardId: string,
+    data: {
+      merchant: string;
+      purchaseDate: string;
+      quotaAmount: number;
+      totalInstallments: number;
+      paidInstallments: number;
+      lastPaidMonth: string; // "2026-01"
+      currency: string;
+    },
+  ): Promise<{ transaction: Transaction; quotasCreated: number }> {
+    // Crear la transacción
+    const transactionId = this.repository.repository.doc().id;
+    const transaction: Transaction = {
+      id: transactionId,
+      amount: data.quotaAmount,
+      currency: data.currency,
+      cardType: "",
+      cardLastDigits: "",
+      merchant: data.merchant,
+      transactionDate: new Date(data.purchaseDate),
+      bank: "manual",
+      email: "",
+      creditCardId,
+      source: "manual",
+      totalInstallments: data.totalInstallments,
+      paidInstallments: data.paidInstallments,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    };
+
+    await this.repository.create(transaction);
+
+    // Generar cuotas
+    // lastPaidMonth es "2026-01" => la cuota paidInstallments se pagó en ese mes
+    // Las cuotas pendientes empiezan el mes siguiente
+    const [lastYear, lastMonthNum] = data.lastPaidMonth.split("-").map(Number);
+
+    for (let i = 1; i <= data.totalInstallments; i++) {
+      const isPaid = i <= data.paidInstallments;
+
+      // Calcular due_date: cuotas van mes a mes
+      // Cuota paidInstallments cae en lastPaidMonth
+      // Offset from lastPaidMonth: i - paidInstallments
+      const monthOffset = i - data.paidInstallments;
+      const dueDate = new Date(lastYear, lastMonthNum - 1 + monthOffset, 15);
+
+      const quota: Quota = {
+        id: this.repository.repository.doc().id,
+        transactionId,
+        amount: data.quotaAmount,
+        due_date: dueDate,
+        status: isPaid ? "paid" : "pending",
+        currency: data.currency,
+        payment_date: isPaid ? dueDate : undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+
+      await this.repository.addQuota(creditCardId, transactionId, quota);
+    }
+
+    return {
+      transaction,
+      quotasCreated: data.totalInstallments,
+    };
+  }
+
   async initializeQuotasForAllTransactions(
     creditCardId: string,
   ): Promise<number> {

@@ -99,6 +99,65 @@ export class TransactionController {
     }
   };
 
+  createManualTransaction = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { creditCardId } = req.params;
+
+      if (!creditCardId) {
+        res.status(400).json({ message: "❌ Falta creditCardId." });
+        return;
+      }
+
+      const {
+        merchant,
+        purchaseDate,
+        quotaAmount,
+        totalInstallments,
+        paidInstallments,
+        lastPaidMonth,
+        currency,
+      } = req.body;
+
+      if (
+        !merchant ||
+        !purchaseDate ||
+        !quotaAmount ||
+        !totalInstallments ||
+        paidInstallments === undefined ||
+        !lastPaidMonth ||
+        !currency
+      ) {
+        res.status(400).json({ message: "❌ Faltan campos requeridos." });
+        return;
+      }
+
+      const result = await this.service.createManualTransaction(creditCardId, {
+        merchant,
+        purchaseDate,
+        quotaAmount,
+        totalInstallments,
+        paidInstallments,
+        lastPaidMonth,
+        currency,
+      });
+
+      res.status(201).json({
+        message: `✅ Transacción manual creada con ${result.quotasCreated} cuotas.`,
+        transaction: result.transaction,
+        quotasCreated: result.quotasCreated,
+      });
+    } catch (error) {
+      console.error("Error creating manual transaction:", error);
+      res.status(500).json({
+        message: "Error al crear transacción manual",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
   importBankTransactions = async (
     req: Request,
     res: Response,

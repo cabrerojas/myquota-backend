@@ -73,7 +73,16 @@ export class StatsService {
               );
             })?.month;
 
-            if (periodMonth) periodKeys.add(periodMonth);
+            // Compute calendar month key for this quota
+            const dueDate = new Date(q.due_date as unknown as string);
+            const calKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
+
+            if (periodMonth) {
+              periodKeys.add(periodMonth);
+            } else {
+              // Fallback: calendar month key for quotas outside billing periods
+              periodKeys.add(calKey);
+            }
 
             if (q.currency === "Dolar") {
               totalUSD += q.amount;
@@ -81,8 +90,14 @@ export class StatsService {
               totalCLP += q.amount;
             }
 
-            // Next payment = quotas in current billing period
-            if (currentPeriod && periodMonth === currentPeriod.month) {
+            // Next payment = quotas in current billing period or current calendar month
+            const nowDate = new Date();
+            const currentCalKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}`;
+            const isCurrentPeriod =
+              (currentPeriod && periodMonth === currentPeriod.month) ||
+              (!periodMonth && calKey === currentCalKey);
+
+            if (isCurrentPeriod) {
               if (q.currency === "Dolar") {
                 nextMonthUSD += q.amount;
               } else {
