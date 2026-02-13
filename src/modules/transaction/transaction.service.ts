@@ -437,6 +437,109 @@ export class TransactionService extends BaseService<Transaction> {
     };
   }
 
+  /**
+   * Elimina una transacción manual y todas sus cuotas (hard delete).
+   */
+  async deleteManualTransaction(
+    creditCardId: string,
+    transactionId: string,
+  ): Promise<{ deletedQuotas: number }> {
+    const transaction = await this.repository.findById(transactionId);
+    if (!transaction) {
+      throw new Error("Transacción no encontrada");
+    }
+    if (transaction.source !== "manual") {
+      throw new Error("Solo se pueden eliminar transacciones manuales");
+    }
+
+    // Eliminar todas las cuotas primero
+    const deletedQuotas = await this.repository.deleteAllQuotas(
+      creditCardId,
+      transactionId,
+    );
+
+    // Eliminar la transacción (hard delete)
+    await this.repository.delete(transactionId);
+
+    return { deletedQuotas };
+  }
+
+  /**
+   * Edita una transacción manual: actualiza datos y recrea cuotas.
+   */
+  async updateManualTransaction(
+    creditCardId: string,
+    transactionId: string,
+    data: {
+      merchant: string;
+      purchaseDate: string;
+      quotaAmount: number;
+      totalInstallments: number;
+      paidInstallments: number;
+      lastPaidMonth: string;
+      currency: string;
+    },
+  ): Promise<{ transaction: Transaction; quotasCreated: number }> {
+    const existing = await this.repository.findById(transactionId);
+    if (!existing) {
+      throw new Error("Transacción no encontrada");
+    }
+    if (existing.source !== "manual") {
+      throw new Error("Solo se pueden editar transacciones manuales");
+    }
+
+    // Actualizar la transacción
+    await this.repository.update(transactionId, {
+      merchant: data.merchant,
+      amount: data.quotaAmount,
+      currency: data.currency,
+      transactionDate: new Date(data.purchaseDate),
+      totalInstallments: data.totalInstallments,
+      paidInstallments: data.paidInstallments,
+      updatedAt: new Date(),
+    } as Partial<Transaction>);
+
+    // Borrar todas las cuotas existentes y recrearlas
+    await this.repository.deleteAllQuotas(creditCardId, transactionId);
+
+    const [lastYear, lastMonthNum] = data.lastPaidMonth.split("-").map(Number);
+
+    for (let i = 1; i <= data.totalInstallments; i++) {
+      const isPaid = i <= data.paidInstallments;
+      const monthOffset = i - data.paidInstallments;
+      const dueDate = new Date(lastYear, lastMonthNum - 1 + monthOffset, 15);
+
+      const quota: Quota = {
+        id: this.repository.repository.doc().id,
+        transactionId,
+        amount: data.quotaAmount,
+        due_date: dueDate,
+        status: isPaid ? "paid" : "pending",
+        currency: data.currency,
+        payment_date: isPaid ? dueDate : null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+
+      await this.repository.addQuota(creditCardId, transactionId, quota);
+    }
+
+    const updated = await this.repository.findById(transactionId);
+    return {
+      transaction: updated!,
+      quotasCreated: data.totalInstallments,
+    };
+  }
+
+  /**
+   * Lista solo las transacciones manuales de una tarjeta.
+   */
+  async getManualTransactions(): Promise<Transaction[]> {
+    const all = await this.repository.findAll();
+    return all.filter((t) => t.source === "manual");
+  }
+
   async initializeQuotasForAllTransactions(
     creditCardId: string,
   ): Promise<number> {

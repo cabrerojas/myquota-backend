@@ -158,6 +158,76 @@ export class TransactionController {
     }
   };
 
+  deleteManualTransaction = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { creditCardId, transactionId } = req.params;
+      const result = await this.service.deleteManualTransaction(
+        creditCardId,
+        transactionId,
+      );
+
+      res.status(200).json({
+        message: `✅ Transacción eliminada con ${result.deletedQuotas} cuotas.`,
+        deletedQuotas: result.deletedQuotas,
+      });
+    } catch (error) {
+      console.error("Error deleting manual transaction:", error);
+      const status = error instanceof Error && error.message.includes("Solo se pueden") ? 400 : 500;
+      res.status(status).json({
+        message: error instanceof Error ? error.message : "Error al eliminar",
+      });
+    }
+  };
+
+  updateManualTransaction = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { creditCardId, transactionId } = req.params;
+      const { merchant, purchaseDate, quotaAmount, totalInstallments, paidInstallments, lastPaidMonth, currency } = req.body;
+
+      if (!merchant || !quotaAmount || !totalInstallments || paidInstallments === undefined || !lastPaidMonth || !currency) {
+        res.status(400).json({ message: "❌ Faltan campos requeridos." });
+        return;
+      }
+
+      const result = await this.service.updateManualTransaction(
+        creditCardId,
+        transactionId,
+        { merchant, purchaseDate, quotaAmount, totalInstallments, paidInstallments, lastPaidMonth, currency },
+      );
+
+      res.status(200).json({
+        message: `✅ Transacción actualizada con ${result.quotasCreated} cuotas.`,
+        transaction: result.transaction,
+        quotasCreated: result.quotasCreated,
+      });
+    } catch (error) {
+      console.error("Error updating manual transaction:", error);
+      const status = error instanceof Error && error.message.includes("Solo se pueden") ? 400 : 500;
+      res.status(status).json({
+        message: error instanceof Error ? error.message : "Error al actualizar",
+      });
+    }
+  };
+
+  getManualTransactions = async (
+    _req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const transactions = await this.service.getManualTransactions();
+      res.status(200).json(transactions);
+    } catch (error) {
+      console.error("Error getting manual transactions:", error);
+      res.status(500).json({ message: "Error al obtener transacciones manuales" });
+    }
+  };
+
   importBankTransactions = async (
     req: Request,
     res: Response,

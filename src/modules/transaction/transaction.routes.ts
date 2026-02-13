@@ -74,6 +74,27 @@ const createTransactionRouter = (): Router => {
   );
 
   router.get(
+    "/creditCards/:creditCardId/transactions/manual",
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.getManualTransactions(req, res);
+    },
+  );
+
+  router.put(
+    "/creditCards/:creditCardId/transactions/manual/:transactionId",
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.updateManualTransaction(req, res);
+    },
+  );
+
+  router.delete(
+    "/creditCards/:creditCardId/transactions/manual/:transactionId",
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.deleteManualTransaction(req, res);
+    },
+  );
+
+  router.get(
     "/creditCards/:creditCardId/transactions/monthly-sum",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getMonthlyQuotaSum(req, res);
