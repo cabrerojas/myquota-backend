@@ -22,4 +22,25 @@ export class StatsController {
       res.status(500).json({ message: "Error obteniendo estadísticas." });
     }
   };
+
+  // 📌 Obtener resumen de deuda global (todas las tarjetas)
+  static getDebtSummary = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        res.status(400).json({ message: "❌ Falta userId." });
+        return;
+      }
+
+      const summary = await StatsService.getGlobalDebtSummary(userId);
+      res.status(200).json(summary);
+    } catch (error) {
+      console.error("Error obteniendo resumen de deuda:", error);
+      res.status(500).json({ message: "Error obteniendo resumen de deuda." });
+    }
+  };
 }

@@ -8,6 +8,15 @@ import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.reposito
 const createStatsRouter = (): Router => {
   const router = Router();
 
+  // 📌 Ruta global: resumen de deuda (todas las tarjetas)
+  router.get(
+    "/stats/debt-summary",
+    authenticate,
+    (req: Request, res: Response) => {
+      return StatsController.getDebtSummary(req, res);
+    },
+  );
+
   router.use(
     "/creditCards/:creditCardId/stats",
     authenticate,
@@ -23,17 +32,17 @@ const createStatsRouter = (): Router => {
       try {
         const transactionRepository = new TransactionRepository(
           userId,
-          creditCardId
+          creditCardId,
         );
 
         const billingPeriodRepository = new BillingPeriodRepository(
           userId,
-          creditCardId
+          creditCardId,
         );
 
         const service = new StatsService(
           transactionRepository,
-          billingPeriodRepository
+          billingPeriodRepository,
         );
         const controller = new StatsController(service);
         res.locals.statsController = controller;
@@ -42,14 +51,14 @@ const createStatsRouter = (): Router => {
         console.error("❌ Error en el middleware de Stats:", error);
         res.status(500).json({ message: "❌ Error interno en Stats." });
       }
-    }
+    },
   );
 
   router.get(
     "/creditCards/:creditCardId/stats/monthly",
     (req: Request, res: Response) => {
       return res.locals.statsController.getMonthlyStats(req, res);
-    }
+    },
   );
 
   return router;
