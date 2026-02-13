@@ -9,7 +9,7 @@ export class Quota implements IBaseEntity {
     due_date!: Date;            // Fecha de vencimiento de la cuota
     status!: 'pending' | 'paid';  // Estado de la cuota
     currency!: string;            // Moneda de la cuota
-    payment_date?: Date;        // Fecha de pago de la cuota (opcional)
+    payment_date?: Date | null;        // Fecha de pago de la cuota (opcional)
     createdAt!: Date;
     updatedAt!: Date;
     deletedAt!: Date | null;

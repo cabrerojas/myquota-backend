@@ -422,7 +422,7 @@ export class TransactionService extends BaseService<Transaction> {
         due_date: dueDate,
         status: isPaid ? "paid" : "pending",
         currency: data.currency,
-        payment_date: isPaid ? dueDate : undefined,
+        payment_date: isPaid ? dueDate : null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
