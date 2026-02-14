@@ -56,4 +56,63 @@ export class CategoryService extends BaseService<Category> {
     }
     return null;
   }
+
+  /**
+   * Copia una categoría global a las categorías personales de un usuario
+   */
+  async addGlobalCategoryToUser(categoryId: string, userId: string): Promise<Category> {
+    const category = await this.globalRepository.findById(categoryId);
+    if (!category) {
+      throw new Error("Categoría global no encontrada");
+    }
+
+    const userRepo = new CategoryRepository(userId);
+    const created = await userRepo.create({
+      name: category.name,
+      color: category.color,
+      icon: category.icon,
+      userId,
+    } as Omit<Category, keyof import("@/shared/interfaces/base.repository").IBaseEntity>);
+
+    return created;
+  }
+
+  /**
+   * Crea una categoría global o personal y asocia el comercio si se provee
+   */
+  async createCategoryWithMerchant({
+    name,
+    color,
+    icon,
+    isGlobal,
+    merchantName,
+    pattern,
+    userId,
+  }: {
+    name: string;
+    color?: string;
+    icon?: string;
+    isGlobal?: boolean;
+    merchantName?: string;
+    pattern?: string;
+    userId?: string;
+  }) {
+    if (!name) throw new Error("El nombre de la categoría es requerido");
+    let category;
+    if (isGlobal) {
+      category = await this.globalRepository.create({ name, color, icon });
+    } else {
+      if (!userId) throw new Error("userId requerido para categoría personal");
+      category = await this.userRepository?.create({ name, color, icon });
+    }
+    if (category && merchantName && pattern && userId) {
+      await this.addMerchantPatternToCategory(
+        category.id,
+        merchantName,
+        pattern,
+        userId,
+      );
+    }
+    return category;
+  }
 }
