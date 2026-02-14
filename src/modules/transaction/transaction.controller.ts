@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { TransactionService } from "./transaction.service";
+import { Transaction } from "./transaction.model";
+import { CategoryService } from "@/modules/category/category.service";
 
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
@@ -8,6 +10,34 @@ export class TransactionController {
   getTransactions = async (_: Request, res: Response): Promise<void> => {
     try {
       const transactions = await this.service.findAll();
+
+      // Adjuntar detalles de categoría (nombre, icono, color) cuando esté disponible
+      const userId = _.user?.userId;
+      if (userId) {
+        try {
+          const categoryService = new CategoryService(userId);
+          const categories = await categoryService.getAllCategories();
+          const catMap = new Map(categories.map((c) => [c.id, c]));
+          const enriched = transactions.map((tx) => {
+            if (tx.categoryId && catMap.has(tx.categoryId)) {
+              const c = catMap.get(tx.categoryId)!;
+              return {
+                ...tx,
+                categoryName: c.name,
+                categoryIcon: c.icon,
+                categoryColor: c.color,
+              };
+            }
+            return tx;
+          });
+          res.status(200).json(enriched);
+          return;
+        } catch (e) {
+          console.warn("Could not enrich transactions with categories:", e);
+          // fallback to returning raw transactions
+        }
+      }
+
       res.status(200).json(transactions);
     } catch (error) {
       console.error("Error getting transactions:", error);
@@ -42,6 +72,27 @@ export class TransactionController {
         return;
       }
 
+      // Enriquecer con datos de categoría si existe
+      const userId = req.user?.userId;
+      if (userId && transaction.categoryId) {
+        try {
+          const categoryService = new CategoryService(userId);
+          const categories = await categoryService.getAllCategories();
+          const c = categories.find((cat) => cat.id === transaction.categoryId);
+          if (c) {
+            res.status(200).json({
+              ...transaction,
+              categoryName: c.name,
+              categoryIcon: c.icon,
+              categoryColor: c.color,
+            });
+            return;
+          }
+        } catch (e) {
+          console.warn("Could not enrich transaction with category:", e);
+        }
+      }
+
       res.status(200).json(transaction);
     } catch (error) {
       console.error("Error getting transaction:", error);
@@ -70,9 +121,41 @@ export class TransactionController {
         return;
       }
 
+      // Enriquecer la transacción actualizada con datos de categoría si es posible
+      type EnrichedTransaction = Transaction & {
+        categoryName?: string;
+        categoryIcon?: string;
+        categoryColor?: string;
+      };
+
+      let responseData: EnrichedTransaction = { ...updatedTransaction };
+      const userId = req.user?.userId;
+      if (userId && updatedTransaction.categoryId) {
+        try {
+          const categoryService = new CategoryService(userId);
+          const categories = await categoryService.getAllCategories();
+          const c = categories.find(
+            (cat) => cat.id === updatedTransaction.categoryId,
+          );
+          if (c) {
+            responseData = {
+              ...updatedTransaction,
+              categoryName: c.name,
+              categoryIcon: c.icon,
+              categoryColor: c.color,
+            };
+          }
+        } catch (e) {
+          console.warn(
+            "Could not enrich updated transaction with category:",
+            e,
+          );
+        }
+      }
+
       res.status(200).json({
         message: "Transacción actualizada exitosamente",
-        data: updatedTransaction,
+        data: responseData,
       });
     } catch (error) {
       console.error("Error updating transaction:", error);
@@ -254,6 +337,36 @@ export class TransactionController {
   ): Promise<void> => {
     try {
       const transactions = await this.service.getManualTransactions();
+
+      // Enriquecer con detalles de categoría si es posible
+      const userId = _req.user?.userId;
+      if (userId) {
+        try {
+          const categoryService = new CategoryService(userId);
+          const categories = await categoryService.getAllCategories();
+          const catMap = new Map(categories.map((c) => [c.id, c]));
+          const enriched = transactions.map((tx) => {
+            if (tx.categoryId && catMap.has(tx.categoryId)) {
+              const c = catMap.get(tx.categoryId)!;
+              return {
+                ...tx,
+                categoryName: c.name,
+                categoryIcon: c.icon,
+                categoryColor: c.color,
+              };
+            }
+            return tx;
+          });
+          res.status(200).json(enriched);
+          return;
+        } catch (e) {
+          console.warn(
+            "Could not enrich manual transactions with categories:",
+            e,
+          );
+        }
+      }
+
       res.status(200).json(transactions);
     } catch (error) {
       console.error("Error getting manual transactions:", error);
