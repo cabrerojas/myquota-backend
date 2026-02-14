@@ -393,6 +393,7 @@ export class TransactionService extends BaseService<Transaction> {
       paidInstallments: number;
       lastPaidMonth: string; // "2026-01"
       currency: string;
+      categoryId?: string;
     },
   ): Promise<{ transaction: Transaction; quotasCreated: number }> {
     // Crear la transacción
@@ -404,6 +405,7 @@ export class TransactionService extends BaseService<Transaction> {
       cardType: "",
       cardLastDigits: "",
       merchant: data.merchant,
+      categoryId: data.categoryId,
       transactionDate: new Date(data.purchaseDate),
       bank: "manual",
       email: "",
@@ -495,6 +497,7 @@ export class TransactionService extends BaseService<Transaction> {
       paidInstallments: number;
       lastPaidMonth: string;
       currency: string;
+      categoryId?: string;
     },
   ): Promise<{ transaction: Transaction; quotasCreated: number }> {
     const existing = await this.repository.findById(transactionId);
@@ -509,6 +512,7 @@ export class TransactionService extends BaseService<Transaction> {
     await this.repository.update(transactionId, {
       merchant: data.merchant,
       amount: data.quotaAmount,
+      ...(data.categoryId ? { categoryId: data.categoryId } : {}),
       currency: data.currency,
       transactionDate: new Date(data.purchaseDate),
       totalInstallments: data.totalInstallments,
