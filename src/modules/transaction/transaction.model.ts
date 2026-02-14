@@ -7,6 +7,7 @@ export class Transaction implements IBaseEntity {
   cardType!: string;
   cardLastDigits!: string;
   merchant!: string;
+  categoryId?: string;
   transactionDate!: Date;
   bank!: string;
   email!: string;

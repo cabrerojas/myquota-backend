@@ -9,6 +9,7 @@ import {
 
 import { TransactionRepository } from "./transaction.repository";
 import { Transaction } from "./transaction.model";
+import { CategoryService } from "@/modules/category/category.service";
 import { BaseService } from "@/shared/classes/base.service";
 import { Quota } from "@/modules/quota/quota.model";
 import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
@@ -121,6 +122,9 @@ export class TransactionService extends BaseService<Transaction> {
       let batchData: Transaction[] = [];
       let totalImported = 0;
 
+      // Instanciar el servicio de categorías una vez para usar durante el proceso
+      const categoryService = new CategoryService();
+
       for (const chunk of chunks) {
         await Promise.all(
           chunk.map(async (messageId, index) => {
@@ -155,6 +159,8 @@ export class TransactionService extends BaseService<Transaction> {
                   cardType: "Tarjeta de Crédito",
                   cardLastDigits,
                   merchant,
+                  // categoryId will be set if we find an automatic match
+                  categoryId: undefined,
                   transactionDate,
                   bank: "Banco de Chile",
                   email: "enviodigital@bancochile.cl",
@@ -163,6 +169,17 @@ export class TransactionService extends BaseService<Transaction> {
                   deletedAt: null,
                   creditCardId: "",
                 };
+
+                // Intentar hacer matching por merchant y anexar categoryId si existe
+                try {
+                  const match =
+                    await categoryService.findCategoryByMerchant(merchant);
+                  if (match) {
+                    transactionData.categoryId = match.categoryId;
+                  }
+                } catch (err) {
+                  console.warn("Error buscando categoría por merchant:", err);
+                }
 
                 batchData.push(transactionData);
               }
