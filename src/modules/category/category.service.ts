@@ -60,7 +60,10 @@ export class CategoryService extends BaseService<Category> {
   /**
    * Copia una categoría global a las categorías personales de un usuario
    */
-  async addGlobalCategoryToUser(categoryId: string, userId: string): Promise<Category> {
+  async addGlobalCategoryToUser(
+    categoryId: string,
+    userId: string,
+  ): Promise<Category> {
     const category = await this.globalRepository.findById(categoryId);
     if (!category) {
       throw new Error("Categoría global no encontrada");
@@ -72,7 +75,10 @@ export class CategoryService extends BaseService<Category> {
       color: category.color,
       icon: category.icon,
       userId,
-    } as Omit<Category, keyof import("@/shared/interfaces/base.repository").IBaseEntity>);
+    } as Omit<
+      Category,
+      keyof import("@/shared/interfaces/base.repository").IBaseEntity
+    >);
 
     return created;
   }

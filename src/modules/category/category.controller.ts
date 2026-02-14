@@ -103,6 +103,10 @@ export class CategoryController {
     try {
       const userId = req.user?.userId;
       const { name, color, icon, isGlobal, merchantName, pattern } = req.body;
+      console.log(
+        `[CategoryController] createCategoryWithMerchant user=${userId} body=`,
+        { name, color, icon, isGlobal, merchantName, pattern },
+      );
       const category = await this.service.createCategoryWithMerchant({
         name,
         color,
@@ -183,29 +187,35 @@ export class CategoryController {
     }
   };
 
-    /**
-     * Copia una categoría global a las categorías personales del usuario
-     */
-    addGlobalCategoryToUser = async (req: Request, res: Response): Promise<void> => {
-      try {
-        const userId = req.user?.userId;
-        const { categoryId } = req.params;
-        if (!userId) {
-          res.status(401).json({ message: "Autenticación requerida" });
-          return;
-        }
-        if (!categoryId) {
-          res.status(400).json({ message: "categoryId es requerido" });
-          return;
-        }
-        const newCategory = await this.service.addGlobalCategoryToUser(categoryId, userId);
-        res.status(201).json(newCategory);
-      } catch (error) {
-        console.error("Error copiando categoría global a usuario:", error);
-        res.status(500).json({
-          message: "Error al copiar categoría",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
+  /**
+   * Copia una categoría global a las categorías personales del usuario
+   */
+  addGlobalCategoryToUser = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      const { categoryId } = req.params;
+      if (!userId) {
+        res.status(401).json({ message: "Autenticación requerida" });
+        return;
       }
-    };
+      if (!categoryId) {
+        res.status(400).json({ message: "categoryId es requerido" });
+        return;
+      }
+      const newCategory = await this.service.addGlobalCategoryToUser(
+        categoryId,
+        userId,
+      );
+      res.status(201).json(newCategory);
+    } catch (error) {
+      console.error("Error copiando categoría global a usuario:", error);
+      res.status(500).json({
+        message: "Error al copiar categoría",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
 }
