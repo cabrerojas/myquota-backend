@@ -9,7 +9,9 @@ import createCreditCardRouter from "./modules/creditCard/creditCard.routes";
 import createUserRouter from "./modules/user/user.routes";
 import createAuthRouter from "./modules/auth/auth.routes";
 import createBillingPeriodRouter from "./modules/billingPeriod/billingPeriod.routes";
+
 import createStatsRouter from "./modules/stats/stats.routes";
+import createCategoryRouter from "./modules/category";
 
 dotenv.config();
 const app = express();
@@ -22,6 +24,8 @@ app.use("/api", createUserRouter());
 app.use("/api", createAuthRouter());
 app.use("/api", createBillingPeriodRouter());
 app.use("/api", createStatsRouter());
+
+app.use("/api/categories", createCategoryRouter());
 
 app.use(errorHandler);
 
