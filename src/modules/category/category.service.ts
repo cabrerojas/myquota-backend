@@ -75,6 +75,9 @@ export class CategoryService extends BaseService<Category> {
       name: category.name,
       color: category.color,
       icon: category.icon,
+      normalizedName:
+        category.normalizedName ??
+        (category.name ? category.name.trim().toLowerCase() : undefined),
       userId,
     } as Omit<
       Category,
@@ -105,18 +108,40 @@ export class CategoryService extends BaseService<Category> {
     userId?: string;
   }) {
     if (!name) throw new Error("El nombre de la categoría es requerido");
+    const normalizeName = (s: string) =>
+      s
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "");
+    const normalized = normalizeName(name);
     let category;
-    // Buscar categoría existente por nombre (global o personal según isGlobal)
+    // Buscar categoría existente por nombre normalizado (global o personal según isGlobal)
     if (isGlobal) {
-      category = await this.globalRepository.findOne({ name });
+      category = await this.globalRepository.findOne({
+        normalizedName: normalized,
+      });
       if (!category) {
-        category = await this.globalRepository.create({ name, color, icon });
+        category = await this.globalRepository.create({
+          name,
+          color,
+          icon,
+          normalizedName: normalized,
+        });
       }
     } else {
       if (!userId) throw new Error("userId requerido para categoría personal");
-      category = await this.userRepository?.findOne({ name });
+      category = await this.userRepository?.findOne({
+        normalizedName: normalized,
+      });
       if (!category) {
-        category = await this.userRepository?.create({ name, color, icon });
+        category = await this.userRepository?.create({
+          name,
+          color,
+          icon,
+          userId,
+          normalizedName: normalized,
+        });
       }
     }
 
