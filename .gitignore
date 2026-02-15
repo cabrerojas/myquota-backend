@@ -130,3 +130,4 @@ dist
 /src/config/token.json
 /package-lock.json
 /.vscode
+.github

@@ -203,10 +203,7 @@ export class FirestoreRepository<
     });
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.repository
-        .doc(id)
-        .update(this.datesToIsoStrings(entity) as any);
+      await this.repository.doc(id).update(this.datesToIsoStrings(entity));
       return entity;
     } catch (error) {
       console.error("Error in FirestoreRepository.update:", error);
@@ -232,10 +229,8 @@ export class FirestoreRepository<
       if (!entity) return false;
 
       entity.deletedAt = new Date();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.repository
-        .doc(id)
-        .update(this.datesToIsoStrings(entity) as any);
+
+      await this.repository.doc(id).update(this.datesToIsoStrings(entity));
       return true;
     } catch (error) {
       console.error("Error in FirestoreRepository.softDelete:", error);

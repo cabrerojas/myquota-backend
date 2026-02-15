@@ -2,6 +2,7 @@ import { MerchantPatternService } from "./merchant/merchant.service";
 import { BaseService } from "@/shared/classes/base.service";
 import { Category } from "./category.model";
 import { CategoryRepository } from "./category.repository";
+import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 
 export class CategoryService extends BaseService<Category> {
   private globalRepository: CategoryRepository;
@@ -105,12 +106,21 @@ export class CategoryService extends BaseService<Category> {
   }) {
     if (!name) throw new Error("El nombre de la categoría es requerido");
     let category;
+    // Buscar categoría existente por nombre (global o personal según isGlobal)
     if (isGlobal) {
-      category = await this.globalRepository.create({ name, color, icon });
+      category = await this.globalRepository.findOne({ name });
+      if (!category) {
+        category = await this.globalRepository.create({ name, color, icon });
+      }
     } else {
       if (!userId) throw new Error("userId requerido para categoría personal");
-      category = await this.userRepository?.create({ name, color, icon });
+      category = await this.userRepository?.findOne({ name });
+      if (!category) {
+        category = await this.userRepository?.create({ name, color, icon });
+      }
     }
+
+    // Si se indicó un merchant/pattern y tenemos userId, asociarlo y propagar a transacciones
     if (category && merchantName && pattern && userId) {
       await this.addMerchantPatternToCategory(
         category.id,
@@ -118,7 +128,36 @@ export class CategoryService extends BaseService<Category> {
         pattern,
         userId,
       );
+
+      try {
+        // Propagar categoryId a transacciones existentes del usuario con el mismo merchant
+        const creditCardRepo = new CreditCardRepository(userId);
+        const creditCards = await creditCardRepo.findAll();
+        for (const cc of creditCards) {
+          const txCollection = creditCardRepo.getTransactionsCollection(cc.id);
+          const snapshot = await txCollection
+            .where("merchant", "==", merchantName)
+            .where("deletedAt", "==", null)
+            .get();
+          if (!snapshot.empty) {
+            const batch = creditCardRepo.repository.firestore.batch();
+            snapshot.docs.forEach((doc) => {
+              batch.update(doc.ref, {
+                categoryId: category.id,
+                updatedAt: new Date().toISOString(),
+              });
+            });
+            await batch.commit();
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Could not propagate category to existing transactions:",
+          e,
+        );
+      }
     }
+
     return category;
   }
 }
