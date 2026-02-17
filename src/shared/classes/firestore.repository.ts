@@ -35,6 +35,11 @@ export class FirestoreRepository<
   protected datesToIsoStrings(data: Record<string, any>): Record<string, any> {
     const converted = { ...data };
     for (const [key, value] of Object.entries(converted)) {
+      if (value === undefined) {
+        // Firestore rejects `undefined` values — remove the key entirely
+        delete converted[key];
+        continue;
+      }
       if (value instanceof Date) {
         converted[key] = value.toISOString();
       }
