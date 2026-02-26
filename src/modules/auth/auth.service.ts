@@ -11,7 +11,7 @@ export class AuthService {
   async loginWithGoogle(
     idToken: string,
     serverAuthCode?: string,
-  ): Promise<string> {
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       throw new AuthError(
