@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import jwt from "jsonwebtoken";
+import * as jwt from "jsonwebtoken";
 import { UserRepository } from "@modules/user/user.repository";
 import { User } from "@modules/user/user.model";
 import { AuthError } from "@shared/errors/custom.error";
@@ -97,19 +97,16 @@ export class AuthService {
     }
 
     // 🔹 Generar access token (corto) y refresh token (largo)
-    const accessToken = jwt.sign(
-      { userId, email, type: "access" },
-      process.env.JWT_SECRET!,
-      {
-        expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
-      },
-    );
+    const jwtSecret = process.env.JWT_SECRET as jwt.Secret;
+    const accessToken = jwt.sign({ userId, email, type: "access" }, jwtSecret, {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+    } as jwt.SignOptions);
 
     const refreshSecret =
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+      (process.env.JWT_REFRESH_SECRET as jwt.Secret) || jwtSecret;
     const refreshToken = jwt.sign({ userId, type: "refresh" }, refreshSecret, {
       expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
-    });
+    } as jwt.SignOptions);
 
     return { accessToken, refreshToken };
   }
@@ -129,12 +126,13 @@ export class AuthService {
       const user = await this.userRepository.findById(decoded.userId);
       if (!user) throw new Error("Usuario no encontrado");
 
+      const jwtSecret = process.env.JWT_SECRET as jwt.Secret;
       const accessToken = jwt.sign(
         { userId: user.id, email: user.email, type: "access" },
-        process.env.JWT_SECRET!,
+        jwtSecret,
         {
           expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
-        },
+        } as jwt.SignOptions,
       );
 
       // Opcional: rotar refresh token (aquí devolvemos uno nuevo)
@@ -143,7 +141,7 @@ export class AuthService {
         refreshSecret,
         {
           expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
-        },
+        } as jwt.SignOptions,
       );
 
       return { accessToken, refreshToken: newRefreshToken };
