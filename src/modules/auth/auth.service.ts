@@ -96,11 +96,60 @@ export class AuthService {
       }
     }
 
-    // 🔹 Generar JWT para el usuario
-    const jwtToken = jwt.sign({ userId, email }, process.env.JWT_SECRET!, {
-      expiresIn: "7d",
+    // 🔹 Generar access token (corto) y refresh token (largo)
+    const accessToken = jwt.sign(
+      { userId, email, type: "access" },
+      process.env.JWT_SECRET!,
+      {
+        expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+      },
+    );
+
+    const refreshSecret =
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+    const refreshToken = jwt.sign({ userId, type: "refresh" }, refreshSecret, {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
     });
 
-    return jwtToken;
+    return { accessToken, refreshToken };
+  }
+
+  async refreshTokens(refreshToken: string) {
+    try {
+      const refreshSecret =
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+      const decoded = jwt.verify(refreshToken, refreshSecret) as {
+        userId: string;
+        type?: string;
+      };
+      if (!decoded || decoded.type !== "refresh" || !decoded.userId) {
+        throw new Error("Refresh token inválido");
+      }
+
+      const user = await this.userRepository.findById(decoded.userId);
+      if (!user) throw new Error("Usuario no encontrado");
+
+      const accessToken = jwt.sign(
+        { userId: user.id, email: user.email, type: "access" },
+        process.env.JWT_SECRET!,
+        {
+          expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+        },
+      );
+
+      // Opcional: rotar refresh token (aquí devolvemos uno nuevo)
+      const newRefreshToken = jwt.sign(
+        { userId: user.id, type: "refresh" },
+        refreshSecret,
+        {
+          expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
+        },
+      );
+
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
+      console.error("Error refreshing token:", error);
+      throw error;
+    }
   }
 }

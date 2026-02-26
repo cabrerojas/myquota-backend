@@ -10,6 +10,7 @@ const createAuthRouter = (): Router => {
   const controller = new AuthController(authService);
 
   router.post("/login/google", controller.loginWithGoogle.bind(controller));
+  router.post("/refresh", controller.refresh.bind(controller));
 
   return router;
 };

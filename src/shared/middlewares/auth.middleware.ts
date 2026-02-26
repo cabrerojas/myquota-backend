@@ -13,7 +13,7 @@ declare global {
 export const authenticate = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   const token = req.headers.authorization?.split(" ")[1];
 
@@ -38,7 +38,19 @@ export const authenticate = (
     next();
   } catch (error) {
     console.error("Error en autenticación:", error);
-    res.status(401).json({ message: "Token inválido o expirado" });
+    // Diferenciar expiración para que el cliente pueda intentar refresh
+    if (error instanceof jwt.TokenExpiredError) {
+      res
+        .status(401)
+        .json({
+          message: "Token expirado",
+          code: "token_expired",
+          expiredAt: error.expiredAt,
+        });
+      return;
+    }
+
+    res.status(401).json({ message: "Token inválido" });
     return;
   }
 };

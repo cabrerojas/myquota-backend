@@ -14,12 +14,9 @@ export class AuthController {
       }
 
       // 🔹 Enviar el idToken y serverAuthCode al servicio
-      const jwtToken = await this.service.loginWithGoogle(
-        token,
-        serverAuthCode,
-      );
+      const tokens = await this.service.loginWithGoogle(token, serverAuthCode);
 
-      res.status(200).json({ token: jwtToken });
+      res.status(200).json(tokens);
     } catch (error) {
       if (error instanceof AuthError) {
         console.error(`AuthError [${error.statusCode}]:`, error.message);
@@ -28,6 +25,22 @@ export class AuthController {
       }
       console.error("Error en login con Google:", error);
       res.status(500).json({ message: "Error interno en autenticación" });
+    }
+  };
+
+  refresh = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        res.status(400).json({ message: "refreshToken no proporcionado" });
+        return;
+      }
+
+      const tokens = await this.service.refreshTokens(refreshToken);
+      res.status(200).json(tokens);
+    } catch (error) {
+      console.error("Error en refresh controller:", error);
+      res.status(401).json({ message: "Refresh token inválido o expirado" });
     }
   };
 }
