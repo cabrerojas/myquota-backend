@@ -15,8 +15,8 @@ const createCreditCardRouter = (): Router => {
       const userId = req.user?.userId;
 
       if (!userId) {
-         res.status(400).json({ message: "❌ userId es requerido." });
-         return;
+        res.status(400).json({ message: "❌ userId es requerido." });
+        return;
       }
 
       try {
@@ -30,13 +30,11 @@ const createCreditCardRouter = (): Router => {
         next(); // 🔥 Continuar con la ejecución
       } catch (error) {
         console.error("❌ Error en el middleware de CreditCard:", error);
-        res
-          .status(500)
-          .json({
-            message: "❌ Error interno en la configuración de CreditCard.",
-          });
+        res.status(500).json({
+          message: "❌ Error interno en la configuración de CreditCard.",
+        });
       }
-    }
+    },
   );
 
   // 📌 Definir rutas usando `res.locals.creditCardController`
@@ -47,6 +45,13 @@ const createCreditCardRouter = (): Router => {
   router.post("/creditCards", (req: Request, res: Response) => {
     return res.locals.creditCardController.addCreditCard(req, res);
   });
+
+  router.get(
+    "/creditCards/uncategorized-count",
+    (req: Request, res: Response) => {
+      return res.locals.creditCardController.getUncategorizedCount(req, res);
+    },
+  );
 
   router.get("/creditCards/:creditCardId", (req: Request, res: Response) => {
     return res.locals.creditCardController.getCreditCard(req, res);

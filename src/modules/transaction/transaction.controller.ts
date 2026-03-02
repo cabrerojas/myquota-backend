@@ -413,10 +413,15 @@ export class TransactionController {
       const { orphanedTransactions, suggestedPeriod } =
         await this.service.checkOrphanedTransactions();
 
+      // 🔹 Contar transacciones sin categoría en esta tarjeta
+      const allTx = await this.service.findAll();
+      const uncategorizedCount = allTx.filter((tx) => !tx.categoryId).length;
+
       res.status(200).json({
         message: "Transacciones importadas exitosamente",
         importedCount,
         quotasCreated,
+        uncategorizedCount,
         orphanedCount: orphanedTransactions.length,
         orphanedTransactions: orphanedTransactions.slice(0, 5),
         suggestedPeriod,
