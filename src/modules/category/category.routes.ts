@@ -45,6 +45,11 @@ const createCategoryRouter = (): Router => {
     return res.locals.categoryController.matchMerchant(req, res);
   });
 
+  // Endpoint para obtener categorías usadas previamente para un merchant
+  router.get("/merchant-history", (req: Request, res: Response) => {
+    return res.locals.categoryController.getMerchantCategoryHistory(req, res);
+  });
+
   // Endpoint para copiar una categoría global a las categorías del usuario
   router.post("/:categoryId/add-to-user", (req: Request, res: Response) => {
     return res.locals.categoryController.addGlobalCategoryToUser(req, res);

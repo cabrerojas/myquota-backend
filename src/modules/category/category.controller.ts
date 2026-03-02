@@ -218,4 +218,60 @@ export class CategoryController {
       });
     }
   };
+
+  /**
+   * Returns categories previously used for a given merchant,
+   * enriched with name/icon/color and sorted by frequency.
+   * Query param: ?merchant=MERCHANT_NAME
+   */
+  getMerchantCategoryHistory = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      const merchant = req.query.merchant as string | undefined;
+
+      if (!userId) {
+        res.status(401).json({ message: "Autenticación requerida" });
+        return;
+      }
+      if (!merchant) {
+        res
+          .status(400)
+          .json({ message: "Query param 'merchant' es requerido" });
+        return;
+      }
+
+      const history = await this.service.getMerchantCategoryHistory(
+        userId,
+        merchant,
+      );
+
+      // Enrich with category details
+      const allCategories = await this.service.getAllCategories();
+      const catMap = new Map(allCategories.map((c) => [c.id, c]));
+
+      const enriched = history
+        .filter((h) => catMap.has(h.categoryId))
+        .map((h) => {
+          const cat = catMap.get(h.categoryId)!;
+          return {
+            categoryId: h.categoryId,
+            categoryName: cat.name,
+            categoryIcon: cat.icon,
+            categoryColor: cat.color,
+            count: h.count,
+          };
+        });
+
+      res.status(200).json(enriched);
+    } catch (error) {
+      console.error("Error getting merchant category history:", error);
+      res.status(500).json({
+        message: "Error al obtener historial de categorías del comercio",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
 }

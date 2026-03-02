@@ -2,8 +2,6 @@ import { Request, Response } from "express";
 import { TransactionService } from "./transaction.service";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
-import { CategoryRuleService } from "@/modules/categoryRule/categoryRule.service";
-import { normalizeMerchant } from "@/shared/utils/merchant.utils";
 
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
@@ -463,113 +461,6 @@ export class TransactionController {
       res.status(500).json({
         message: "❌ Error al obtener la sumatoria de cuotas por mes",
         error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  };
-
-  /**
-   * Returns a category suggestion for a specific transaction.
-   * Evaluates user rules first, then falls back to MerchantPattern.
-   */
-  getCategorySuggestion = async (
-    req: Request,
-    res: Response,
-  ): Promise<void> => {
-    try {
-      const { transactionId } = req.params;
-      const categoryRuleService = res.locals.categoryRuleService as
-        | CategoryRuleService
-        | undefined;
-
-      const transaction = await this.service.findById(transactionId);
-      if (!transaction) {
-        res.status(404).json({ message: "Transacción no encontrada" });
-        return;
-      }
-
-      if (!categoryRuleService) {
-        res.status(500).json({ message: "Servicio de reglas no disponible" });
-        return;
-      }
-
-      const suggestion = await categoryRuleService.getSuggestion(
-        transaction.merchant,
-      );
-      res.status(200).json(suggestion);
-    } catch (error) {
-      console.error("Error getting category suggestion:", error);
-      res.status(500).json({
-        message: "Error al obtener sugerencia de categoría",
-        error: error instanceof Error ? error.message : "Error desconocido",
-      });
-    }
-  };
-
-  /**
-   * Bulk categorizes transactions matching a merchant pattern.
-   * Body: { merchantPattern: string, categoryId: string, action?: "suggest" | "apply" }
-   * Only applies when action is "apply" (default).
-   */
-  bulkCategorize = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { merchantPattern, categoryId } = req.body;
-
-      if (!merchantPattern || !categoryId) {
-        res.status(400).json({
-          message: "merchantPattern y categoryId son requeridos",
-        });
-        return;
-      }
-
-      const allTransactions = await this.service.findAll();
-      const toUpdate: Transaction[] = [];
-
-      for (const tx of allTransactions) {
-        const normalized = normalizeMerchant(tx.merchant);
-        if (
-          normalized.merchantKey.includes(merchantPattern.toLowerCase()) ||
-          tx.merchant.toLowerCase().includes(merchantPattern.toLowerCase())
-        ) {
-          toUpdate.push(tx);
-        }
-      }
-
-      let updatedCount = 0;
-      for (const tx of toUpdate) {
-        const updated = await this.service.update(tx.id, {
-          categoryId,
-          categorizationMethod: "auto",
-          merchantNormalized: normalizeMerchant(tx.merchant).merchantKey,
-        } as Partial<Transaction>);
-        if (updated) updatedCount++;
-      }
-
-      // Enrich response with category details
-      const userId = req.user?.userId;
-      let categoryName = "";
-      if (userId) {
-        try {
-          const categoryService = new CategoryService(userId);
-          const categories = await categoryService.getAllCategories();
-          const cat = categories.find((c) => c.id === categoryId);
-          categoryName = cat?.name ?? "";
-        } catch {
-          // Category enrichment is optional
-        }
-      }
-
-      res.status(200).json({
-        message: `${updatedCount} transacciones categorizadas exitosamente`,
-        updatedCount,
-        categoryId,
-        categoryName,
-        merchantPattern,
-      });
-    } catch (error) {
-      console.error("Error in bulk categorize:", error);
-      res.status(500).json({
-        message: "Error al categorizar transacciones en lote",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };

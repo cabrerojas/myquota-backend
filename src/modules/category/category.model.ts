@@ -7,7 +7,6 @@ export class Category implements IBaseEntity {
   color?: string;
   icon?: string;
   userId?: string; // undefined for global categories
-  parentId?: string | null; // optional hierarchy: subcategory → parent category
   createdAt!: Date;
   updatedAt!: Date;
   deletedAt?: Date | null;

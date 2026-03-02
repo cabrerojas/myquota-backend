@@ -4,9 +4,6 @@ import { TransactionRepository } from "./transaction.repository";
 import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
-import { CategoryRuleRepository } from "@/modules/categoryRule/categoryRule.repository";
-import { CategoryRuleService } from "@/modules/categoryRule/categoryRule.service";
-import { CategoryService } from "@/modules/category/category.service";
 
 const createTransactionRouter = (): Router => {
   const router = Router();
@@ -42,16 +39,7 @@ const createTransactionRouter = (): Router => {
         );
         const controller = new TransactionController(service);
 
-        // CategoryRule service for suggestion/bulk endpoints
-        const categoryRuleRepo = new CategoryRuleRepository(userId);
-        const categoryService = new CategoryService(userId);
-        const categoryRuleService = new CategoryRuleService(
-          categoryRuleRepo,
-          categoryService,
-        );
-
         res.locals.transactionController = controller;
-        res.locals.categoryRuleService = categoryRuleService;
         next();
       } catch (error) {
         console.error("❌ Error en el middleware de Transaction:", error);
@@ -147,22 +135,6 @@ const createTransactionRouter = (): Router => {
     "/creditCards/:creditCardId/transactions/import-bank-transactions",
     (req: Request, res: Response) => {
       return res.locals.transactionController.importBankTransactions(req, res);
-    },
-  );
-
-  // Category suggestion for a specific transaction
-  router.get(
-    "/creditCards/:creditCardId/transactions/:transactionId/category-suggestion",
-    (req: Request, res: Response) => {
-      return res.locals.transactionController.getCategorySuggestion(req, res);
-    },
-  );
-
-  // Bulk categorize transactions by merchant pattern
-  router.post(
-    "/creditCards/:creditCardId/transactions/bulk-categorize",
-    (req: Request, res: Response) => {
-      return res.locals.transactionController.bulkCategorize(req, res);
     },
   );
 

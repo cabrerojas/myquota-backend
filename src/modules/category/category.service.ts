@@ -145,7 +145,7 @@ export class CategoryService extends BaseService<Category> {
       }
     }
 
-    // Si se indicó un merchant/pattern y tenemos userId, asociarlo y propagar a transacciones
+    // Si se indicó un merchant/pattern y tenemos userId, asociarlo a la categoría
     if (category && merchantName && pattern && userId) {
       await this.addMerchantPatternToCategory(
         category.id,
@@ -153,36 +153,45 @@ export class CategoryService extends BaseService<Category> {
         pattern,
         userId,
       );
-
-      try {
-        // Propagar categoryId a transacciones existentes del usuario con el mismo merchant
-        const creditCardRepo = new CreditCardRepository(userId);
-        const creditCards = await creditCardRepo.findAll();
-        for (const cc of creditCards) {
-          const txCollection = creditCardRepo.getTransactionsCollection(cc.id);
-          const snapshot = await txCollection
-            .where("merchant", "==", merchantName)
-            .where("deletedAt", "==", null)
-            .get();
-          if (!snapshot.empty) {
-            const batch = creditCardRepo.repository.firestore.batch();
-            snapshot.docs.forEach((doc) => {
-              batch.update(doc.ref, {
-                categoryId: category.id,
-                updatedAt: new Date().toISOString(),
-              });
-            });
-            await batch.commit();
-          }
-        }
-      } catch (e) {
-        console.warn(
-          "Could not propagate category to existing transactions:",
-          e,
-        );
-      }
     }
 
     return category;
+  }
+
+  /**
+   * Returns the distinct categories that have been assigned to transactions
+   * matching a given merchant name across all the user's credit cards.
+   * This powers the "previously used categories" suggestion UI.
+   */
+  async getMerchantCategoryHistory(
+    userId: string,
+    merchantName: string,
+  ): Promise<Array<{ categoryId: string; count: number }>> {
+    const creditCardRepo = new CreditCardRepository(userId);
+    const creditCards = await creditCardRepo.findAll();
+    const categoryCount = new Map<string, number>();
+
+    const normalizedMerchant = merchantName.trim().toUpperCase();
+
+    for (const cc of creditCards) {
+      const txCollection = creditCardRepo.getTransactionsCollection(cc.id);
+      const snapshot = await txCollection.where("deletedAt", "==", null).get();
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        if (
+          data.categoryId &&
+          data.merchant &&
+          data.merchant.trim().toUpperCase() === normalizedMerchant
+        ) {
+          const prev = categoryCount.get(data.categoryId) ?? 0;
+          categoryCount.set(data.categoryId, prev + 1);
+        }
+      }
+    }
+
+    return Array.from(categoryCount.entries())
+      .map(([categoryId, count]) => ({ categoryId, count }))
+      .sort((a, b) => b.count - a.count);
   }
 }

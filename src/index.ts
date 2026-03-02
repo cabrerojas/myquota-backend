@@ -12,7 +12,6 @@ import createBillingPeriodRouter from "./modules/billingPeriod/billingPeriod.rou
 
 import createStatsRouter from "./modules/stats/stats.routes";
 import createCategoryRouter from "./modules/category";
-import createCategoryRuleRouter from "./modules/categoryRule/categoryRule.routes";
 
 dotenv.config();
 const app = express();
@@ -27,7 +26,6 @@ app.use("/api", createBillingPeriodRouter());
 app.use("/api", createStatsRouter());
 
 app.use("/api/categories", createCategoryRouter());
-app.use("/api", createCategoryRuleRouter());
 
 app.use(errorHandler);
 
