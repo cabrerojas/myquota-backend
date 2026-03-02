@@ -16,12 +16,31 @@ export class CategoryService extends BaseService<Category> {
     }
   }
 
-  async getAllCategories(): Promise<Category[]> {
+  async getAllCategories(options?: {
+    deduplicate?: boolean;
+  }): Promise<Category[]> {
     const [global, user] = await Promise.all([
       this.globalRepository.findAll(),
       this.userRepository ? this.userRepository.findAll() : Promise.resolve([]),
     ]);
-    return [...global, ...user];
+
+    const all = [...global, ...user];
+
+    if (!options?.deduplicate) return all;
+
+    // Deduplicate by normalizedName — personal categories take priority
+    const seen = new Map<string, Category>();
+    for (const cat of user) {
+      const key = cat.normalizedName ?? cat.name.trim().toLowerCase();
+      seen.set(key, cat);
+    }
+    for (const cat of global) {
+      const key = cat.normalizedName ?? cat.name.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.set(key, cat);
+      }
+    }
+    return Array.from(seen.values());
   }
 
   /**
@@ -156,6 +175,51 @@ export class CategoryService extends BaseService<Category> {
     }
 
     return category;
+  }
+
+  /**
+   * Registers a merchant→category mapping in the global registry so that
+   * future imports auto-suggest this category for the same merchant.
+   *
+   * - If `categoryId` is a global category, the pattern is registered directly.
+   * - If `categoryId` is a personal category, the corresponding global
+   *   category (by normalizedName) is used instead.
+   * - If no global equivalent exists, the registration is skipped silently.
+   */
+  async registerMerchantMapping(
+    categoryId: string,
+    merchantName: string,
+    userId: string,
+  ): Promise<void> {
+    // Check global category first
+    const globalCat = await this.globalRepository.findById(categoryId);
+    if (globalCat) {
+      await this.addMerchantPatternToCategory(
+        globalCat.id,
+        merchantName,
+        merchantName,
+        userId,
+      );
+      return;
+    }
+
+    // It's a personal category — find the global equivalent by normalizedName
+    if (this.userRepository) {
+      const personalCat = await this.userRepository.findById(categoryId);
+      if (personalCat?.normalizedName) {
+        const globalEquivalent = await this.globalRepository.findOne({
+          normalizedName: personalCat.normalizedName,
+        });
+        if (globalEquivalent) {
+          await this.addMerchantPatternToCategory(
+            globalEquivalent.id,
+            merchantName,
+            merchantName,
+            userId,
+          );
+        }
+      }
+    }
   }
 
   /**

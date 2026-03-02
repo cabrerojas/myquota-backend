@@ -7,7 +7,9 @@ export class CategoryController {
   // Usar métodos de clase arrow functions para evitar problemas con el this
   getCategories = async (_: Request, res: Response): Promise<void> => {
     try {
-      const categories = await this.service.getAllCategories();
+      const categories = await this.service.getAllCategories({
+        deduplicate: true,
+      });
       res.status(200).json(categories);
     } catch (error) {
       console.error("Error getting categories:", error);

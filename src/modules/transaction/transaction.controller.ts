@@ -131,8 +131,8 @@ export class TransactionController {
       let responseData: EnrichedTransaction = { ...updatedTransaction };
       const userId = req.user?.userId;
       if (userId && updatedTransaction.categoryId) {
+        const categoryService = new CategoryService(userId);
         try {
-          const categoryService = new CategoryService(userId);
           const categories = await categoryService.getAllCategories();
           const c = categories.find(
             (cat) => cat.id === updatedTransaction.categoryId,
@@ -150,6 +150,20 @@ export class TransactionController {
             "Could not enrich updated transaction with category:",
             e,
           );
+        }
+
+        // Register the merchant→category mapping in the global registry
+        // so future imports auto-suggest this category for the same merchant.
+        if (updatedTransaction.merchant) {
+          try {
+            await categoryService.registerMerchantMapping(
+              updatedTransaction.categoryId,
+              updatedTransaction.merchant,
+              userId,
+            );
+          } catch (e) {
+            console.error("Error registering merchant mapping:", e);
+          }
         }
       }
 
