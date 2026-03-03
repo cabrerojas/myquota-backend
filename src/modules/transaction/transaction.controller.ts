@@ -429,7 +429,10 @@ export class TransactionController {
         suggestedPeriod,
       } = await this.service.runImportFlow(userId, creditCardId);
 
-      StatsService.triggerRecompute(userId, creditCardId);
+      // Solo recomputar reportes si realmente se importaron transacciones nuevas
+      if (importedCount > 0) {
+        StatsService.triggerRecompute(userId, creditCardId);
+      }
 
       res.status(200).json({
         message: "Transacciones importadas exitosamente",

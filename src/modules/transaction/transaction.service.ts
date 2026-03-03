@@ -355,6 +355,16 @@ export class TransactionService extends BaseService<Transaction> {
   }> {
     const { importedCount } = await this.fetchBankEmails(userId);
 
+    // Cortocircuito: si no hay correos nuevos, no ejecutar ninguna consulta adicional
+    if (importedCount === 0) {
+      return {
+        importedCount: 0,
+        quotasCreated: 0,
+        orphanedTransactions: [],
+        suggestedPeriod: null,
+      };
+    }
+
     // UN solo findAll() compartido por initializeQuotas y checkOrphans
     const transactions = await this.repository.findAll();
 
