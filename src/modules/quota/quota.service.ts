@@ -105,10 +105,6 @@ export class QuotaService extends BaseService<Quota> {
       createdQuotas.push(quota);
     }
 
-    console.log(
-      `✅ ${createdQuotas.length} cuotas creadas para transacción ${transactionId}`,
-    );
-
     return { deleted, created: createdQuotas.length, quotas: createdQuotas };
   }
 }

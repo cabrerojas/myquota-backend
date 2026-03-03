@@ -7,11 +7,11 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
 ];
 
-// 📌 Decodificar credenciales desde variable de entorno
+// Decodificar credenciales desde variable de entorno
 function getGoogleCredentials(): Auth.OAuth2Client {
   if (!process.env.CREDENTIALS_JSON) {
     throw new Error(
-      "❌ CREDENTIALS_JSON no está definido en las variables de entorno."
+      "CREDENTIALS_JSON no está definido en las variables de entorno."
     );
   }
 
@@ -30,7 +30,7 @@ function getGoogleCredentials(): Auth.OAuth2Client {
   );
 }
 
-// 📌 Guardar el token de Gmail en Firestore
+// Guardar el token de Gmail en Firestore
 export async function saveTokenToFirestore(
   userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,7 +48,7 @@ export async function saveTokenToFirestore(
     });
 }
 
-// 📌 Obtener el token de Gmail desde Firestore
+// Obtener el token de Gmail desde Firestore
 export async function getTokenFromFirestore(
   userId: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,7 +62,7 @@ export async function getTokenFromFirestore(
   return tokenDoc.exists ? tokenDoc.data() : null;
 }
 
-// 📌 Autenticar con Gmail
+// Autenticar con Gmail
 export async function authenticate(): Promise<Auth.OAuth2Client> {
   const oAuth2Client = getGoogleCredentials();
 
@@ -72,7 +72,7 @@ export async function authenticate(): Promise<Auth.OAuth2Client> {
     prompt: "consent",
   });
 
-  console.warn("🔗 Autoriza la aplicación visitando este enlace:", authUrl);
+  console.warn("Autoriza la aplicación visitando este enlace:", authUrl);
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -80,7 +80,7 @@ export async function authenticate(): Promise<Auth.OAuth2Client> {
 
   return new Promise((resolve) => {
     rl.question(
-      "🔑 Introduce el código de autorización aquí: ",
+      "Introduce el código de autorización aquí: ",
       async (code) => {
         const { tokens } = await oAuth2Client.getToken(code);
 

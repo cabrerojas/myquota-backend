@@ -4,14 +4,14 @@ import { StatsService } from "./stats.service";
 export class StatsController {
   constructor(private readonly service: StatsService) {}
 
-  // 📌 Obtener estadísticas de gastos por mes
+  // Obtener estadísticas de gastos por mes
   getMonthlyStats = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user?.userId; // 🔥 Obtener `userId` del JWT
+      const userId = req.user?.userId;
       const { creditCardId } = req.params;
 
       if (!userId || !creditCardId) {
-        res.status(400).json({ message: "❌ Falta userId o creditCardId." });
+        res.status(400).json({ message: "Falta userId o creditCardId." });
         return;
       }
 
@@ -23,7 +23,7 @@ export class StatsController {
     }
   };
 
-  // 📌 Obtener resumen de deuda global (todas las tarjetas)
+  // Obtener resumen de deuda global (todas las tarjetas)
   static getDebtSummary = async (
     req: Request,
     res: Response,
@@ -32,7 +32,7 @@ export class StatsController {
       const userId = req.user?.userId;
 
       if (!userId) {
-        res.status(400).json({ message: "❌ Falta userId." });
+        res.status(400).json({ message: "Falta userId." });
         return;
       }
 

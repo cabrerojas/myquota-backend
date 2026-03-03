@@ -119,30 +119,22 @@ export class StatsService {
     };
   }
 
-  async getMonthlyStats(userId: string, creditCardId: string) {
-    console.log(`📌 Obteniendo estadísticas para ${userId}, ${creditCardId}`);
-
-    // 🔹 Obtener los BillingPeriods para la tarjeta de crédito
+  async getMonthlyStats(_userId: string, _creditCardId: string) {
+    // Obtener los BillingPeriods para la tarjeta de crédito
     const billingPeriods = await this.billingPeriodRepository.findAll();
 
     if (!billingPeriods.length) {
-      console.warn("⚠️ No hay períodos de facturación registrados.");
       return [];
     }
 
-    console.log(
-      `📌 Se encontraron ${billingPeriods.length} períodos de facturación.`,
-    );
-
-    // 🔹 Obtener todas las transacciones de la tarjeta de crédito
+    // Obtener todas las transacciones de la tarjeta de crédito
     const transactions = await this.transactionRepository.findAll();
 
     if (!transactions.length) {
-      console.warn("⚠️ No hay transacciones registradas.");
       return [];
     }
 
-    // 🔹 Crear un mapa de gastos por BillingPeriod
+    // Crear un mapa de gastos por BillingPeriod
     const billingStats: {
       [month: string]: {
         totalCLP: number;
@@ -168,7 +160,7 @@ export class StatsService {
           transaction.transactionDate,
         );
 
-        // ✅ Incluir la transacción si está dentro del BillingPeriod
+        // Incluir la transacción si está dentro del BillingPeriod
         if (
           transactionDate >= periodStartDate &&
           transactionDate <= periodEndDate
@@ -183,7 +175,7 @@ export class StatsService {
             billingStats[period.month].totalDolar += amount;
           }
 
-          // 🔹 Asegurar que la categoría exista en el breakdown
+          // Asegurar que la categoría exista en el breakdown
           if (!billingStats[period.month].categoryBreakdown[category]) {
             billingStats[period.month].categoryBreakdown[category] = {
               CLP: 0,
@@ -191,7 +183,7 @@ export class StatsService {
             };
           }
 
-          // 🔹 Sumar en la categoría correspondiente según la moneda
+          // Sumar en la categoría correspondiente según la moneda
           billingStats[period.month].categoryBreakdown[category][currency] +=
             amount;
         }

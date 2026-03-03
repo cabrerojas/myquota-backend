@@ -20,7 +20,7 @@ export class AuthService {
       );
     }
 
-    // 🔹 Verificar el `idToken` con Google
+    // Verificar el `idToken` con Google
     const client = new OAuth2Client(clientId);
     let payload;
     try {
@@ -42,14 +42,12 @@ export class AuthService {
     }
 
     const { email, name, picture } = payload;
-    console.log("Usuario autenticado:", email);
 
-    // 🔹 Buscar o crear usuario usando el repositorio
+    // Buscar o crear usuario usando el repositorio
     let user = await this.userRepository.findOne({ email });
     let userId: string;
 
     if (!user) {
-      console.log("⚠️ Usuario no encontrado, creando uno nuevo...");
       const newUser: User = {
         id: "",
         email,
@@ -63,7 +61,6 @@ export class AuthService {
       userId = user.id;
     } else {
       userId = user.id;
-      console.log(`✅ Usuario encontrado: ${userId}`);
 
       // Actualizar picture si cambió
       if (picture && picture !== user.picture) {
@@ -74,29 +71,24 @@ export class AuthService {
       }
     }
 
-    console.log("🔑 Generando token de acceso...");
-
-    // 🔹 Si hay serverAuthCode, intercambiar por tokens de Gmail y guardarlos
+    // Si hay serverAuthCode, intercambiar por tokens de Gmail y guardarlos
     if (serverAuthCode) {
       try {
-        console.log("🔄 Intercambiando serverAuthCode por tokens de Gmail...");
         const oAuth2Client = new OAuth2Client(
           clientId,
           process.env.GOOGLE_CLIENT_SECRET,
           "", // redirect_uri vacío para mobile
         );
         const { tokens } = await oAuth2Client.getToken(serverAuthCode);
-        console.log("✅ Tokens de Gmail obtenidos");
 
         await saveTokenToFirestore(userId, tokens);
-        console.log("✅ Tokens de Gmail guardados en Firestore");
       } catch (error) {
         // No fallar el login si falla el guardado de tokens de Gmail
-        console.error("⚠️ Error al guardar tokens de Gmail:", error);
+        console.error("Error al guardar tokens de Gmail:", error);
       }
     }
 
-    // 🔹 Generar access token (corto) y refresh token (largo)
+    // Generar access token (corto) y refresh token (largo)
     const jwtSecret = process.env.JWT_SECRET as jwt.Secret;
     const accessToken = jwt.sign({ userId, email, type: "access" }, jwtSecret, {
       expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",

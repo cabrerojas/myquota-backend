@@ -9,23 +9,21 @@ import { authenticate } from "@/shared/middlewares/auth.middleware";
 const createQuotaRouter = (): Router => {
   const router = Router();
 
-  // 📌 Middleware para validar JWT y extraer `creditCardId` y `transactionId`
   router.use(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas",
-    authenticate, // 🔥 Primero validamos el JWT
+    authenticate,
     (req: Request, res: Response, next: NextFunction) => {
       const { creditCardId, transactionId } = req.params;
-      const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
+      const userId = req.user?.userId;
 
       if (!userId || !creditCardId || !transactionId) {
         res.status(400).json({
-          message: "❌ creditCardId y transactionId son requeridos en la URL.",
+          message: "creditCardId y transactionId son requeridos en la URL.",
         });
         return;
       }
 
       try {
-        // 📌 Crear repositorios con `userId` desde JWT
         const creditCardRepository = new CreditCardRepository(userId);
         const transactionRepository = new TransactionRepository(
           userId,
@@ -42,20 +40,17 @@ const createQuotaRouter = (): Router => {
           creditCardRepository,
         );
         const controller = new QuotaController(service);
-
-        // 📌 Guardar en `res.locals` para que las rutas lo utilicen
         res.locals.quotaController = controller;
-        next(); // 🔥 Asegurar que `next()` se llama para continuar con la ejecución
+        next();
       } catch (error) {
-        console.error("❌ Error en el middleware de Quota:", error);
+        console.error("Error en el middleware de Quota:", error);
         res.status(500).json({
-          message: "❌ Error interno en la configuración de Quota.",
+          message: "Error interno en la configuración de Quota.",
         });
       }
     },
   );
 
-  // 📌 Definir rutas usando `res.locals.quotaController`
   router.get(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas",
     (req: Request, res: Response) => {

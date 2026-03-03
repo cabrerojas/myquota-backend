@@ -122,10 +122,6 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
       }
     }
 
-    console.log(
-      `✅ Período ${period.month} pagado: ${paidCount} cuotas, $${totalAmount}`,
-    );
-
     return { paidCount, totalAmount };
   }
 }

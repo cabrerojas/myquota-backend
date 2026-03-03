@@ -13,7 +13,6 @@ export class AuthController {
         return;
       }
 
-      // 🔹 Enviar el idToken y serverAuthCode al servicio
       const tokens = await this.service.loginWithGoogle(token, serverAuthCode);
 
       res.status(200).json(tokens);

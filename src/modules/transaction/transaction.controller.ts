@@ -107,10 +107,6 @@ export class TransactionController {
     try {
       const { transactionId } = req.params;
       const updatedData = req.body;
-      console.log(
-        `[TransactionController] updateTransaction called for id=${transactionId} user=${req.user?.userId} body=`,
-        updatedData,
-      );
       const updatedTransaction = await this.service.update(
         transactionId,
         updatedData,

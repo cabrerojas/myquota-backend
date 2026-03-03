@@ -8,7 +8,7 @@ import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.reposito
 const createStatsRouter = (): Router => {
   const router = Router();
 
-  // 📌 Ruta global: resumen de deuda (todas las tarjetas)
+  // Ruta global: resumen de deuda (todas las tarjetas)
   router.get(
     "/stats/debt-summary",
     authenticate,
@@ -25,7 +25,7 @@ const createStatsRouter = (): Router => {
       const { creditCardId } = req.params;
 
       if (!userId || !creditCardId) {
-        res.status(400).json({ message: "❌ Falta userId o creditCardId." });
+        res.status(400).json({ message: "Falta userId o creditCardId." });
         return;
       }
 
@@ -48,8 +48,8 @@ const createStatsRouter = (): Router => {
         res.locals.statsController = controller;
         next();
       } catch (error) {
-        console.error("❌ Error en el middleware de Stats:", error);
-        res.status(500).json({ message: "❌ Error interno en Stats." });
+        console.error("Error en el middleware de Stats:", error);
+        res.status(500).json({ message: "Error interno en Stats." });
       }
     },
   );

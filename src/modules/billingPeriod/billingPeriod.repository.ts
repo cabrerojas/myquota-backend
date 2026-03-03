@@ -9,12 +9,12 @@ export class BillingPeriodRepository extends FirestoreRepository<BillingPeriod> 
   async findAll(): Promise<BillingPeriod[]> {
     try {
       const snapshot = await this.repository
-        .orderBy("startDate", "desc") // 🔹 Ordenar por fecha de inicio en orden descendente
+        .orderBy("startDate", "desc")
         .get();
 
       return snapshot.docs.map((doc) => doc.data() as BillingPeriod);
     } catch (error) {
-      console.error("❌ Error al obtener los BillingPeriods ordenados:", error);
+      console.error("Error al obtener los BillingPeriods ordenados:", error);
       throw new Error("Error al obtener los períodos de facturación.");
     }
   }

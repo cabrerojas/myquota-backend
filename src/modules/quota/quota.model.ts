@@ -1,7 +1,5 @@
-import { Collection } from "@/shared/decorators/collection.decorator";
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
 
-@Collection("quotas")
 export class Quota implements IBaseEntity {
   id!: string; // Fireorm requiere un ID explícito
   transactionId!: string; // ID de la transacción asociada
