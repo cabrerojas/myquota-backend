@@ -379,6 +379,9 @@ export class StatsService {
 
     // Async recompute monthly stats for the specific card (if known)
     if (creditCardId) {
+      // Invalidate monthlyQuotaSum — keyed by creditCardId (not user prefix)
+      CacheService.invalidate(CacheKeys.monthlyQuotaSum(creditCardId));
+
       const txRepo = new TransactionRepository(userId, creditCardId);
       const bpRepo = new BillingPeriodRepository(userId, creditCardId);
       const svc = new StatsService(txRepo, bpRepo);

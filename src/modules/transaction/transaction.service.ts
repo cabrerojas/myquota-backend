@@ -13,6 +13,11 @@ import { CategoryService } from "@/modules/category/category.service";
 import { BaseService } from "@/shared/classes/base.service";
 import { Quota } from "@/modules/quota/quota.model";
 import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
+import {
+  CacheService,
+  CacheKeys,
+  CacheTTL,
+} from "@/shared/services/cache.service";
 
 export class TransactionService extends BaseService<Transaction> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
@@ -31,20 +36,16 @@ export class TransactionService extends BaseService<Transaction> {
 
   // Otros métodos específicos del servicio
   async fetchBankEmails(userId: string): Promise<{ importedCount: number }> {
-    console.warn(`🔍 Buscando emailToken para el usuario: ${userId}`);
-
-    // 🔹 Verificar si ya hay un token guardado en Firestore
+    // Verificar si ya hay un token guardado en Firestore
     const tokenData = await getTokenFromFirestore(userId);
 
     if (!tokenData) {
       throw new Error(
-        "❌ No se encontró un token. Conéctate con Gmail nuevamente.",
+        "No se encontró un token de Gmail. Conéctate con Gmail nuevamente.",
       );
     }
 
-    console.log(tokenData);
-
-    // 🔹 Crear cliente OAuth con el token guardado
+    // Crear cliente OAuth con el token guardado
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const auth: Auth.OAuth2Client = new google.auth.OAuth2(
@@ -57,30 +58,27 @@ export class TransactionService extends BaseService<Transaction> {
       expiry_date: tokenData.expiryDate,
     });
 
-    // 🔹 Si el token expiró, intentar renovar con refresh_token
+    // Si el token expiró, intentar renovar con refresh_token
     if (new Date().getTime() > tokenData.expiryDate) {
-      console.log("🔄 Token expirado, renovando con refresh_token...");
       if (!tokenData.refreshToken) {
         throw new Error(
-          "❌ El token de Gmail ha expirado y no hay refresh_token. Conéctate nuevamente.",
+          "El token de Gmail ha expirado y no hay refresh_token. Conéctate nuevamente.",
         );
       }
       try {
         const { credentials } = await auth.refreshAccessToken();
         auth.setCredentials(credentials);
 
-        // Guardar los nuevos tokens en Firestore
         const { saveTokenToFirestore } = await import("../../config/gmailAuth");
         await saveTokenToFirestore(userId, {
           access_token: credentials.access_token,
           refresh_token: credentials.refresh_token || tokenData.refreshToken,
           expiry_date: credentials.expiry_date,
         });
-        console.log("✅ Token de Gmail renovado y guardado");
       } catch (refreshError) {
-        console.error("❌ Error renovando token de Gmail:", refreshError);
+        console.error("Error renovando token de Gmail:", refreshError);
         throw new Error(
-          "❌ No se pudo renovar el token de Gmail. Conéctate nuevamente.",
+          "No se pudo renovar el token de Gmail. Conéctate nuevamente.",
         );
       }
     }
@@ -95,29 +93,20 @@ export class TransactionService extends BaseService<Transaction> {
       .toString()
       .padStart(2, "0")}/${startOfMonth.getDate().toString().padStart(2, "0")}`;
 
-    console.warn(`Buscando correos de transacciones desde ${formattedDate}`);
     const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
     const res = await gmail.users.messages.list({ userId: "me", q: query });
 
     if (res.data.messages) {
       const messageIds = res.data.messages.map((message) => message.id!);
-      console.log("Message IDs:", messageIds);
       const existingIds =
         await this.repository.getExistingTransactionIds(messageIds);
-      console.log(
-        "Existing IDs#####################################:",
-        existingIds,
-      );
       const newMessageIds = messageIds.filter(
         (id) => !existingIds.includes(id),
       );
 
       if (newMessageIds.length === 0) {
-        console.warn("No hay nuevos correos para procesar.");
         return { importedCount: 0 };
       }
-
-      console.warn(`Procesando ${newMessageIds.length} nuevos correos`);
       const chunks = chunkArray(newMessageIds, 100);
       let batchData: Transaction[] = [];
       let totalImported = 0;
@@ -138,13 +127,12 @@ export class TransactionService extends BaseService<Transaction> {
 
       for (const chunk of chunks) {
         await Promise.all(
-          chunk.map(async (messageId, index) => {
+          chunk.map(async (messageId) => {
             const email = await gmail.users.messages.get({
               userId: "me",
               id: messageId,
             });
             let encodedMessage = email.data.payload?.body?.data;
-            console.warn(`Procesando correo ${index + 1} de ${chunk.length}`);
 
             if (email.data.payload) {
               encodedMessage = this.findHtmlOrPlainText(email.data.payload);
@@ -196,7 +184,6 @@ export class TransactionService extends BaseService<Transaction> {
           }),
         );
 
-        console.log("Batch data:", batchData);
         if (batchData.length > 0) {
           totalImported += batchData.length;
           await this.repository.saveBatch(batchData);
@@ -631,89 +618,72 @@ export class TransactionService extends BaseService<Transaction> {
     const transactions =
       preloadedTransactions ?? (await this.repository.findAll());
 
-    if (!transactions.length) {
-      console.warn("⚠️ No se encontraron transacciones para procesar.");
-      return 0;
-    }
+    if (!transactions.length) return 0;
 
-    console.log(`📌 Se encontraron ${transactions.length} transacciones.`);
-
-    // Obtener las cuotas existentes para estas transacciones
+    // Obtener las cuotas existentes para estas transacciones (N lecturas paralelas)
     const existingQuotas = await Promise.all(
-      transactions.map(async (transaction) => {
-        return await this.repository.getQuotas(creditCardId, transaction.id);
-      }),
+      transactions.map((transaction) =>
+        this.repository.getQuotas(creditCardId, transaction.id),
+      ),
     );
 
-    // Aplanar el array de cuotas existentes
-    const allExistingQuotas = existingQuotas.flat();
     const existingQuotaIds = new Set(
-      allExistingQuotas.map((quota) => quota.transactionId),
+      existingQuotas.flat().map((quota) => quota.transactionId),
     );
 
-    // Filtrar las transacciones que no tienen cuotas creadas
     const transactionsWithoutQuotas = transactions.filter(
       (transaction) => !existingQuotaIds.has(transaction.id),
     );
 
-    if (!transactionsWithoutQuotas.length) {
-      console.warn("✅ Todas las transacciones ya tienen cuotas creadas.");
-      return 0;
-    }
+    if (!transactionsWithoutQuotas.length) return 0;
 
-    console.log(
-      `📌 Se crearán cuotas para ${transactionsWithoutQuotas.length} transacciones.`,
-    );
-
-    // Crear cuotas en paralelo usando Promise.all
+    // Crear cuotas en paralelo
     await Promise.all(
       transactionsWithoutQuotas.map(async (transaction) => {
         const quotaData: Quota = {
-          id: this.repository.repository.doc().id, // Generar un ID único para la cuota
+          id: this.repository.repository.doc().id,
           transactionId: transaction.id,
           amount: transaction.amount,
-          due_date: transaction.transactionDate, // Fecha estimada de vencimiento
+          due_date: transaction.transactionDate,
           status: "pending",
           currency: transaction.currency,
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
         };
-
-        // Crear la cuota para la transacción
         await this.repository.addQuota(creditCardId, transaction.id, quotaData);
-        console.warn(
-          `✅ Cuota creada para la transacción con ID ${transaction.id}`,
-        );
       }),
-    );
-
-    console.warn(
-      `✅ Cuotas creadas para ${transactionsWithoutQuotas.length} transacciones.`,
     );
 
     return transactionsWithoutQuotas.length;
   }
 
   /**
-   * 🔹 Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
+   * Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
+   * Costo L3: 1 (billingPeriods) + 1 (transactions) + N_transactions (getQuotas) reads.
+   * Resultado cacheado en L1 memoria con TTL MEDIUM (2 min).
+   * Invalidación automática vía StatsService.triggerRecompute → CacheService.invalidateByPrefix.
    */
   async getMonthlyQuotaSum(
     creditCardId: string,
   ): Promise<{ period: string; currency: string; totalAmount: number }[]> {
+    // L1: memoria — clave por creditCardId (IDs de Firestore son globalmente únicos)
+    // Invalidación explícita vía StatsService.triggerRecompute cuando creditCardId es conocido
+    const cacheKey = CacheKeys.monthlyQuotaSum(creditCardId);
+    const cached =
+      CacheService.get<
+        { period: string; currency: string; totalAmount: number }[]
+      >(cacheKey);
+    if (cached !== null) return cached;
+
     try {
-      console.warn(
-        `📌 Obteniendo sumatoria de cuotas por período de facturación para la tarjeta ${creditCardId}...`,
-      );
+      const [billingPeriods, transactions] = await Promise.all([
+        this.billingPeriodRepository.findAll(),
+        this.repository.findAll(),
+      ]);
 
-      // 🔹 Obtener los períodos de facturación de la tarjeta
-      const billingPeriods = await this.billingPeriodRepository.findAll();
-      if (!billingPeriods.length) {
-        console.warn("⚠️ No se encontraron períodos de facturación.");
-        return [];
-      }
+      if (!billingPeriods.length || !transactions.length) return [];
 
-      // 🔹 Convertir las fechas de `billingPeriods` a hora de Chile
       const formattedBillingPeriods = billingPeriods.map((period) => ({
         periodKey: `${convertUtcToChileTime(
           period.startDate,
@@ -727,58 +697,38 @@ export class TransactionService extends BaseService<Transaction> {
         ),
       }));
 
-      // 🔹 Obtener todas las transacciones de la tarjeta
-      const transactions = await this.repository.findAll();
-      if (!transactions.length) {
-        console.warn("⚠️ No se encontraron transacciones para procesar.");
-        return [];
-      }
+      // N reads paralelas (una por transacción)
+      const allQuotas = (
+        await Promise.all(
+          transactions.map((tx) =>
+            this.repository.getQuotas(creditCardId, tx.id),
+          ),
+        )
+      ).flat();
 
-      console.log(`📌 Se encontraron ${transactions.length} transacciones.`);
-
-      // 🔹 Obtener todas las cuotas de las transacciones
-      const quotas = await Promise.all(
-        transactions.map(async (transaction) => {
-          return await this.repository.getQuotas(creditCardId, transaction.id);
-        }),
-      );
-
-      // 🔹 Aplanar el array de cuotas
-      const allQuotas = quotas.flat();
-      console.log(`📌 Se encontraron ${allQuotas.length} cuotas.`);
-
-      // 🔹 Inicializar el mapa de sumas por período
       const periodSumMap: { [key: string]: { [currency: string]: number } } =
         {};
 
-      formattedBillingPeriods.forEach((billingPeriod) => {
+      for (const billingPeriod of formattedBillingPeriods) {
         periodSumMap[billingPeriod.periodKey] = {};
-
-        // 🔹 Filtrar las cuotas que caen dentro del período de facturación
         const quotasInPeriod = allQuotas.filter((quota) => {
           if (!quota.due_date) return false;
-
           const quotaDate = new Date(
             convertUtcToChileTime(quota.due_date, "yyyy-MM-dd HH:mm:ss"),
           );
-
           return (
             quotaDate >= billingPeriod.startDate &&
             quotaDate <= billingPeriod.endDate
           );
         });
+        for (const quota of quotasInPeriod) {
+          periodSumMap[billingPeriod.periodKey][quota.currency] =
+            (periodSumMap[billingPeriod.periodKey][quota.currency] ?? 0) +
+            quota.amount;
+        }
+      }
 
-        // 🔹 Sumar las cuotas dentro del período por moneda
-        quotasInPeriod.forEach((quota) => {
-          if (!periodSumMap[billingPeriod.periodKey][quota.currency]) {
-            periodSumMap[billingPeriod.periodKey][quota.currency] = 0;
-          }
-          periodSumMap[billingPeriod.periodKey][quota.currency] += quota.amount;
-        });
-      });
-
-      // 🔹 Convertir el objeto de sumas a un array de resultados
-      const periodSumArray = Object.entries(periodSumMap).flatMap(
+      const result = Object.entries(periodSumMap).flatMap(
         ([period, currencyMap]) =>
           Object.entries(currencyMap).map(([currency, totalAmount]) => ({
             period,
@@ -787,10 +737,12 @@ export class TransactionService extends BaseService<Transaction> {
           })),
       );
 
-      return periodSumArray;
+      if (cacheKey) CacheService.set(cacheKey, result, CacheTTL.MEDIUM);
+
+      return result;
     } catch (error) {
       console.error(
-        "❌ Error al obtener la sumatoria de las cuotas por período de facturación:",
+        "Error al obtener la sumatoria de las cuotas por período de facturación:",
         error,
       );
       throw error;
