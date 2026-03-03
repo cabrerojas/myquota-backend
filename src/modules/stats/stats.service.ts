@@ -351,6 +351,34 @@ export class StatsService {
   }
 
   // ---------------------------------------------------------------------------
+  private static uncategorizedCountRef(userId: string) {
+    return db
+      .collection("users")
+      .doc(userId)
+      .collection("summaries")
+      .doc("uncategorizedCount");
+  }
+
+  /**
+   * L3: full compute of uncategorized transaction count (~N_creditCards reads).
+   * Separated for reuse in triggerRecompute.
+   */
+  static async _computeUncategorizedCount(userId: string): Promise<number> {
+    const ccRepo = new CreditCardRepository(userId);
+    const creditCards = await ccRepo.findAll();
+    let count = 0;
+    for (const card of creditCards) {
+      const txCollection = ccRepo.getTransactionsCollection(card.id);
+      const snapshot = await txCollection
+        .where("deletedAt", "==", null)
+        .get();
+      for (const doc of snapshot.docs) {
+        if (!doc.data().categoryId) count++;
+      }
+    }
+    return count;
+  }
+
   // triggerRecompute — called by controllers after any write operation
   // ---------------------------------------------------------------------------
 
@@ -376,6 +404,18 @@ export class StatsService {
         }),
       )
       .catch((err) => console.error("[recompute] debt summary failed:", err));
+
+    // Async recompute uncategorized count and persist to Firestore
+    StatsService._computeUncategorizedCount(userId)
+      .then((count) =>
+        StatsService.uncategorizedCountRef(userId).set({
+          data: count,
+          computedAt: new Date().toISOString(),
+        }),
+      )
+      .catch((err) =>
+        console.error("[recompute] uncategorized count failed:", err),
+      );
 
     // Async recompute monthly stats for the specific card (if known)
     if (creditCardId) {
