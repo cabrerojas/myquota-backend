@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TransactionService } from "./transaction.service";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
-import { CacheService, CacheKeys } from "@/shared/services/cache.service";
+import { StatsService } from "@/modules/stats/stats.service";
 
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
@@ -53,7 +53,7 @@ export class TransactionController {
     try {
       const transaction = await this.service.create(req.body);
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(201).json(transaction);
     } catch (error) {
@@ -166,9 +166,7 @@ export class TransactionController {
         }
       }
 
-      const userId2 = req.user?.userId;
-      if (userId2)
-        CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId2));
+      if (userId) StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(200).json({
         message: "Transacción actualizada exitosamente",
@@ -194,7 +192,7 @@ export class TransactionController {
       }
 
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(200).json({ message: "Transacción eliminada correctamente" });
     } catch (error) {
@@ -253,7 +251,7 @@ export class TransactionController {
 
       const manualUserId = req.user?.userId;
       if (manualUserId)
-        CacheService.invalidateByPrefix(CacheKeys.userPrefix(manualUserId));
+        StatsService.triggerRecompute(manualUserId, creditCardId);
 
       res.status(201).json({
         message: `Transacción manual creada con ${result.quotasCreated} cuotas.`,
@@ -280,8 +278,7 @@ export class TransactionController {
         transactionId,
       );
       const delUserId = req.user?.userId;
-      if (delUserId)
-        CacheService.invalidateByPrefix(CacheKeys.userPrefix(delUserId));
+      if (delUserId) StatsService.triggerRecompute(delUserId, creditCardId);
 
       res.status(200).json({
         message: `Transacción eliminada con ${result.deletedQuotas} cuotas.`,
@@ -342,8 +339,7 @@ export class TransactionController {
       );
 
       const updUserId = req.user?.userId;
-      if (updUserId)
-        CacheService.invalidateByPrefix(CacheKeys.userPrefix(updUserId));
+      if (updUserId) StatsService.triggerRecompute(updUserId, creditCardId);
 
       res.status(200).json({
         message: `Transacción actualizada con ${result.quotasCreated} cuotas.`,
@@ -431,7 +427,7 @@ export class TransactionController {
       const allTx = await this.service.findAll();
       const uncategorizedCount = allTx.filter((tx) => !tx.categoryId).length;
 
-      CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      StatsService.triggerRecompute(userId, creditCardId);
 
       res.status(200).json({
         message: "Transacciones importadas exitosamente",
@@ -462,7 +458,7 @@ export class TransactionController {
       const quotasCreated =
         await this.service.initializeQuotasForAllTransactions(creditCardId);
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId, creditCardId);
       res.status(200).json({
         message:
           "Cuotas creadas para todas las transacciones que no las tenían previamente.",

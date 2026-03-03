@@ -7,6 +7,13 @@ import {
   CacheTTL,
   CacheKeys,
 } from "@/shared/services/cache.service";
+import { db } from "@/config/firebase";
+
+/**
+ * Maximum age of a Firestore-persisted summary before forcing a full recompute.
+ * Firestore summaries survive server restarts; memory cache does not.
+ */
+const SUMMARY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 interface DebtSummary {
   totalCLP: number;
@@ -32,11 +39,76 @@ export class StatsService {
     private billingPeriodRepository: BillingPeriodRepository,
   ) {}
 
+  // ---------------------------------------------------------------------------
+  // Firestore materialized view document references
+  // Path: users/{userId}/summaries/debtSummary
+  //       users/{userId}/creditCards/{cardId}/summaries/monthlyStats
+  // ---------------------------------------------------------------------------
+
+  private static debtSummaryRef(userId: string) {
+    return db
+      .collection("users")
+      .doc(userId)
+      .collection("summaries")
+      .doc("debtSummary");
+  }
+
+  private static monthlyStatsRef(userId: string, creditCardId: string) {
+    return db
+      .collection("users")
+      .doc(userId)
+      .collection("creditCards")
+      .doc(creditCardId)
+      .collection("summaries")
+      .doc("monthlyStats");
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3-level read: L1 memory → L2 Firestore summary (1 read) → L3 full compute
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns the global debt summary.
+   * L1: in-memory cache (fast, resets on server restart)
+   * L2: Firestore materialized view (1 read, survives restarts)
+   * L3: full compute (~789 reads) — only on first load or stale data
+   */
   static async getGlobalDebtSummary(userId: string): Promise<DebtSummary> {
-    const cacheKey = CacheKeys.debtSummary(userId);
-    const cached = CacheService.get<DebtSummary>(cacheKey);
+    // L1: memory cache
+    const memKey = CacheKeys.debtSummary(userId);
+    const cached = CacheService.get<DebtSummary>(memKey);
     if (cached !== null) return cached;
 
+    // L2: Firestore materialized view (1 read)
+    try {
+      const doc = await StatsService.debtSummaryRef(userId).get();
+      if (doc.exists) {
+        const raw = doc.data()!;
+        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
+        if (ageMs < SUMMARY_MAX_AGE_MS) {
+          const summary = raw.data as DebtSummary;
+          CacheService.set(memKey, summary, CacheTTL.LONG);
+          return summary;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to read debt summary from Firestore:", err);
+    }
+
+    // L3: full compute, then persist async
+    const result = await StatsService._computeDebtSummary(userId);
+    StatsService.debtSummaryRef(userId)
+      .set({ data: result, computedAt: new Date().toISOString() })
+      .catch((err) => console.error("Failed to persist debt summary:", err));
+    CacheService.set(memKey, result, CacheTTL.LONG);
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pure compute methods (no caching — separated for reuse in triggerRecompute)
+  // ---------------------------------------------------------------------------
+
+  private static async _computeDebtSummary(userId: string): Promise<DebtSummary> {
     const creditCardRepo = new CreditCardRepository(userId);
     const cards = await creditCardRepo.findAll();
 
@@ -145,15 +217,54 @@ export class StatsService {
       nextMonthUSD,
     };
 
-    CacheService.set(cacheKey, result, CacheTTL.LONG);
     return result;
   }
 
-  async getMonthlyStats(userId: string, creditCardId: string) {
-    const cacheKey = CacheKeys.monthlyStats(userId, creditCardId);
-    const cached = CacheService.get<MonthlyStatEntry[]>(cacheKey);
+  // ---------------------------------------------------------------------------
+  // getMonthlyStats — 3-level cached read
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns monthly spending stats for a credit card.
+   * L1: in-memory cache
+   * L2: Firestore materialized view (1 read, survives restarts)
+   * L3: full compute — only when cache is cold or stale
+   */
+  async getMonthlyStats(
+    userId: string,
+    creditCardId: string,
+  ): Promise<MonthlyStatEntry[]> {
+    // L1: memory cache
+    const memKey = CacheKeys.monthlyStats(userId, creditCardId);
+    const cached = CacheService.get<MonthlyStatEntry[]>(memKey);
     if (cached !== null) return cached;
 
+    // L2: Firestore materialized view (1 read)
+    try {
+      const doc = await StatsService.monthlyStatsRef(userId, creditCardId).get();
+      if (doc.exists) {
+        const raw = doc.data()!;
+        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
+        if (ageMs < SUMMARY_MAX_AGE_MS) {
+          const stats = raw.data as MonthlyStatEntry[];
+          CacheService.set(memKey, stats, CacheTTL.LONG);
+          return stats;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to read monthly stats from Firestore:", err);
+    }
+
+    // L3: full compute, then persist async
+    const result = await this._computeMonthlyStats();
+    StatsService.monthlyStatsRef(userId, creditCardId)
+      .set({ data: result, computedAt: new Date().toISOString() })
+      .catch((err) => console.error("Failed to persist monthly stats:", err));
+    CacheService.set(memKey, result, CacheTTL.LONG);
+    return result;
+  }
+
+  private async _computeMonthlyStats(): Promise<MonthlyStatEntry[]> {
     // Obtener los BillingPeriods para la tarjeta de crédito
     const billingPeriods = await this.billingPeriodRepository.findAll();
 
@@ -224,7 +335,7 @@ export class StatsService {
       });
     }
 
-    const monthlyStats = Object.entries(billingStats)
+    return Object.entries(billingStats)
       .map(([month, data]) => ({
         month,
         totalCLP: data.totalCLP,
@@ -232,8 +343,51 @@ export class StatsService {
         categoryBreakdown: data.categoryBreakdown,
       }))
       .filter((entry) => entry.totalCLP > 0 || entry.totalDolar > 0);
+  }
 
-    CacheService.set(cacheKey, monthlyStats, CacheTTL.LONG);
-    return monthlyStats;
+  // ---------------------------------------------------------------------------
+  // triggerRecompute — called by controllers after any write operation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Invalidates L1 memory cache immediately, then fires async Firestore
+   * recomputes so the next GET serves fresh data from L2 (1 read).
+   *
+   * Use this instead of CacheService.invalidateByPrefix after writes.
+   *
+   * @param userId     - The authenticated user
+   * @param creditCardId - The card being modified (triggers monthly stats recompute)
+   */
+  static triggerRecompute(userId: string, creditCardId?: string): void {
+    // Invalidate memory immediately so the next request doesn't serve stale L1 data
+    CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+
+    // Async recompute debt summary and persist to Firestore
+    StatsService._computeDebtSummary(userId)
+      .then((result) =>
+        StatsService.debtSummaryRef(userId).set({
+          data: result,
+          computedAt: new Date().toISOString(),
+        }),
+      )
+      .catch((err) => console.error("[recompute] debt summary failed:", err));
+
+    // Async recompute monthly stats for the specific card (if known)
+    if (creditCardId) {
+      const txRepo = new TransactionRepository(userId, creditCardId);
+      const bpRepo = new BillingPeriodRepository(userId, creditCardId);
+      const svc = new StatsService(txRepo, bpRepo);
+      svc
+        ._computeMonthlyStats()
+        .then((result) =>
+          StatsService.monthlyStatsRef(userId, creditCardId).set({
+            data: result,
+            computedAt: new Date().toISOString(),
+          }),
+        )
+        .catch((err) =>
+          console.error("[recompute] monthly stats failed:", err),
+        );
+    }
   }
 }

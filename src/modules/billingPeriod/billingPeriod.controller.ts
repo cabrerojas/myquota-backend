@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { BillingPeriodService } from "./billingPeriod.service";
-import { CacheService, CacheKeys } from "@/shared/services/cache.service";
+import { StatsService } from "@/modules/stats/stats.service";
 
 export class BillingPeriodController {
   constructor(private readonly service: BillingPeriodService) {}
@@ -23,7 +23,8 @@ export class BillingPeriodController {
     try {
       const BillingPeriod = await this.service.create(req.body);
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId)
+        StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(201).json(BillingPeriod);
     } catch (error) {
@@ -74,7 +75,8 @@ export class BillingPeriodController {
       }
 
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId)
+        StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(200).json({
         message: "Periodo de facturación actualizado exitosamente",
@@ -102,7 +104,8 @@ export class BillingPeriodController {
       }
 
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId)
+        StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res
         .status(200)
@@ -121,7 +124,8 @@ export class BillingPeriodController {
       const { billingPeriodId } = req.params;
       const result = await this.service.payBillingPeriod(billingPeriodId);
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId)
+        StatsService.triggerRecompute(userId, req.params.creditCardId);
 
       res.status(200).json({
         message: `${result.paidCount} cuotas marcadas como pagadas`,

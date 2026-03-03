@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { CreditCardService } from "./creditCard.service";
-import { CacheService, CacheKeys } from "@/shared/services/cache.service";
+import { StatsService } from "@/modules/stats/stats.service";
 
 export class CreditCardController {
   constructor(private readonly service: CreditCardService) {}
@@ -23,7 +23,7 @@ export class CreditCardController {
     try {
       const CreditCard = await this.service.create(req.body);
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId);
       res.status(201).json(CreditCard);
     } catch (error) {
       console.error("Error adding CreditCard:", error);
@@ -69,7 +69,7 @@ export class CreditCardController {
       }
 
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId);
 
       res.status(200).json({
         message: "CreditCard actualizada exitosamente",
@@ -95,7 +95,7 @@ export class CreditCardController {
       }
 
       const userId = req.user?.userId;
-      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+      if (userId) StatsService.triggerRecompute(userId);
 
       res.status(200).json({ message: "CreditCard eliminada correctamente" });
     } catch (error) {

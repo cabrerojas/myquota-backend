@@ -821,3 +821,128 @@ Estos problemas existen y deben resolverse progresivamente. **No agregar más in
 | [package.json](package.json)                                                             | Scripts y dependencias                   |
 | [tsconfig.json](tsconfig.json)                                                           | Config TypeScript (strict + aliases)     |
 | [eslint.config.mjs](eslint.config.mjs)                                                   | Config ESLint 9                          |
+
+---
+
+## 23. Rendimiento y Vistas Materializadas en Firestore
+
+### El problema: reads costosos en cold start
+
+En el Spark plan (free), Firestore tiene un límite de 50K reads/día. Algunos endpoints agregan datos de muchos documentos (ej. `GET /stats/debt-summary` ≈ 789 reads). Un cache en memoria reduce esto en warm, pero se reinicia cuando el servidor se duerme (Render: ~15 min de inactividad → cold start).
+
+### Solución: 3 niveles de caché en cascada
+
+Para endpoints de **lectura costosa cuyo resultado solo cambia al escribir**, aplicar el patrón de **vista materializada** (pre-computed Firestore document):
+
+```
+GET request:
+  ├── L1: CacheService (memoria)     → hit? return               (0 reads, ms)
+  ├── L2: Firestore summary doc      → existe y fresco? return   (1 read)
+  └── L3: Compute full Firestore     → guardar L2 + L1 → return  (N reads)
+
+POST/PUT/DELETE request:
+  ├── Invalidar L1 inmediatamente (síncrono)
+  └── Recomputar async → persistir en L2 (fire-and-forget, no bloquea)
+```
+
+### Cuándo usar este patrón
+
+Aplicar cuando **TODAS** estas condiciones se cumplen:
+1. El resultado requiere **más de 50 reads** de Firestore
+2. El resultado **solo cambia cuando el usuario escribe datos** (no con el tiempo)
+3. El endpoint se llama con **frecuencia alta** (Dashboard, stats, counts)
+4. La **latencia de cómputo** sería perceptible al usuario (> 500ms)
+
+### Cuándo NO usar
+
+- Consultas simples (< 20 reads) → usar solo `CacheService` en memoria
+- Datos en tiempo real o que cambian sin writes (cotizaciones, fechas)
+- Endpoints de escritura — nunca cachear respuestas de writes
+
+### Summaries disponibles actualmente
+
+| Summary        | Path en Firestore                                                  | Lógica de cómputo         |
+| -------------- | ------------------------------------------------------------------ | ------------------------- |
+| `debtSummary`  | `users/{userId}/summaries/debtSummary`                             | `StatsService`            |
+| `monthlyStats` | `users/{userId}/creditCards/{creditCardId}/summaries/monthlyStats` | `StatsService`            |
+
+Estructura del documento Firestore:
+```json
+{
+  "data": { /* DebtSummary | MonthlyStatEntry[] | etc. */ },
+  "computedAt": "2025-03-03T10:00:00.000Z"
+}
+```
+
+### Implementación — guía paso a paso
+
+**1. Agregar ref helpers privados estáticos al service:**
+```typescript
+private static mySummaryRef(userId: string) {
+  return db
+    .collection("users").doc(userId)
+    .collection("summaries").doc("mySummary");
+}
+```
+
+**2. Separar el cómputo puro en un método privado:**
+```typescript
+private static async _computeMySummary(userId: string): Promise<MySummary> {
+  // ... lógica con reads de Firestore. Sin caching aquí.
+}
+```
+
+**3. Método público con 3 niveles (L1 → L2 → L3):**
+```typescript
+static async getMySummary(userId: string): Promise<MySummary> {
+  // L1: memoria
+  const memKey = CacheKeys.mySummary(userId);
+  const cached = CacheService.get<MySummary>(memKey);
+  if (cached !== null) return cached;
+
+  // L2: Firestore summary (1 read)
+  try {
+    const doc = await MyService.mySummaryRef(userId).get();
+    if (doc.exists) {
+      const raw = doc.data()!;
+      const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
+      if (ageMs < 30 * 60 * 1000) {   // 30 min de frescura
+        const summary = raw.data as MySummary;
+        CacheService.set(memKey, summary, CacheTTL.LONG);
+        return summary;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to read summary from Firestore:", err);
+    // fallback silencioso → continúa a L3
+  }
+
+  // L3: cómputo completo (~N reads)  ← solo en cold start o datos viejos
+  const result = await MyService._computeMySummary(userId);
+  MyService.mySummaryRef(userId)
+    .set({ data: result, computedAt: new Date().toISOString() })
+    .catch((err) => console.error("Failed to persist summary:", err));
+  CacheService.set(memKey, result, CacheTTL.LONG);
+  return result;
+}
+```
+
+**4. Controllers: usar `StatsService.triggerRecompute` después de cada write:**
+```typescript
+// ✅ Correcto — en lugar de CacheService.invalidateByPrefix(...)
+const userId = req.user?.userId;
+if (userId) StatsService.triggerRecompute(userId, req.params.creditCardId);
+```
+
+**`triggerRecompute(userId, creditCardId?)`** hace dos cosas:
+1. Invalida L1 inmediatamente (síncrono)
+2. Dispara recompute de todos los summaries relevantes en background (sin bloquear la respuesta)
+
+### Reglas obligatorias del patrón
+
+- **NUNCA** bloquear la respuesta con `await` al persistir el summary — siempre `.catch(console.error)` asíncrono.
+- **SIEMPRE** tener fallback de L2 a L3 sin propagar el error al usuario (el `try/catch` en L2 es obligatorio).
+- **Agregar la clave** del summary a `CacheKeys` en [src/shared/services/cache.service.ts](src/shared/services/cache.service.ts).
+- **Documentar el costo estimado** de L3 en el JSDoc: `* L3: full compute (~789 reads)`.
+- **NO llamar** `CacheService.invalidateByPrefix` directamente desde controllers — usar siempre `StatsService.triggerRecompute` para datos que tienen summary en Firestore.
+- El summary tiene **30 minutos de frescura máxima** (`SUMMARY_MAX_AGE_MS`). Ajustar si el dominio lo requiere.
