@@ -1,6 +1,7 @@
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import { CategoryService } from "@/modules/category/category.service";
 import { convertUtcToChileTime } from "@/shared/utils/date.utils";
 import {
   CacheService,
@@ -90,7 +91,10 @@ export class StatsService {
         const summary = raw.data as DebtSummary;
         // Migration guard: skip L2 if the persisted doc is missing monthlyBreakdown
         // (written before this field was added). Forces a one-time L3 recompute.
-        if (ageMs < SUMMARY_MAX_AGE_MS && Array.isArray(summary?.monthlyBreakdown)) {
+        if (
+          ageMs < SUMMARY_MAX_AGE_MS &&
+          Array.isArray(summary?.monthlyBreakdown)
+        ) {
           CacheService.set(memKey, summary, CacheTTL.LONG);
           return summary;
         }
@@ -260,6 +264,7 @@ export class StatsService {
     if (cached !== null) return cached;
 
     // L2: Firestore materialized view (1 read)
+    // schemaVersion: 2 = categoryBreakdown keyed by category name (not merchant)
     try {
       const doc = await StatsService.monthlyStatsRef(
         userId,
@@ -268,7 +273,7 @@ export class StatsService {
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        if (ageMs < SUMMARY_MAX_AGE_MS) {
+        if (ageMs < SUMMARY_MAX_AGE_MS && raw.schemaVersion === 2) {
           const stats = raw.data as MonthlyStatEntry[];
           CacheService.set(memKey, stats, CacheTTL.LONG);
           return stats;
@@ -279,15 +284,26 @@ export class StatsService {
     }
 
     // L3: full compute, then persist async
-    const result = await this._computeMonthlyStats();
+    const result = await this._computeMonthlyStats(userId);
     StatsService.monthlyStatsRef(userId, creditCardId)
-      .set({ data: result, computedAt: new Date().toISOString() })
+      .set({
+        data: result,
+        computedAt: new Date().toISOString(),
+        schemaVersion: 2,
+      })
       .catch((err) => console.error("Failed to persist monthly stats:", err));
     CacheService.set(memKey, result, CacheTTL.LONG);
     return result;
   }
 
-  private async _computeMonthlyStats(): Promise<MonthlyStatEntry[]> {
+  private async _computeMonthlyStats(
+    userId: string,
+  ): Promise<MonthlyStatEntry[]> {
+    // Fetch categories once and build a lookup map by id
+    const categoryService = new CategoryService(userId);
+    const allCategories = await categoryService.getAllCategories();
+    const catMap = new Map(allCategories.map((c) => [c.id, c.name]));
+
     // Obtener los BillingPeriods para la tarjeta de crédito
     const billingPeriods = await this.billingPeriodRepository.findAll();
 
@@ -335,7 +351,10 @@ export class StatsService {
         ) {
           const currency = transaction.currency as "CLP" | "Dolar"; // "CLP" o "Dolar"
           const amount = transaction.amount;
-          const category = transaction.merchant || "Otros";
+          const category =
+            (transaction.categoryId && catMap.get(transaction.categoryId)) ||
+            transaction.merchant ||
+            "Otros";
 
           if (currency === "CLP") {
             billingStats[period.month].totalCLP += amount;
@@ -442,11 +461,12 @@ export class StatsService {
       const bpRepo = new BillingPeriodRepository(userId, creditCardId);
       const svc = new StatsService(txRepo, bpRepo);
       svc
-        ._computeMonthlyStats()
+        ._computeMonthlyStats(userId)
         .then((result) =>
           StatsService.monthlyStatsRef(userId, creditCardId).set({
             data: result,
             computedAt: new Date().toISOString(),
+            schemaVersion: 2,
           }),
         )
         .catch((err) =>
