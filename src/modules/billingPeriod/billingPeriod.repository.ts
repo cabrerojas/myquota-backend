@@ -8,9 +8,7 @@ export class BillingPeriodRepository extends FirestoreRepository<BillingPeriod> 
 
   async findAll(): Promise<BillingPeriod[]> {
     try {
-      const snapshot = await this.repository
-        .orderBy("startDate", "desc")
-        .get();
+      const snapshot = await this.repository.orderBy("startDate", "desc").get();
 
       return snapshot.docs.map((doc) => doc.data() as BillingPeriod);
     } catch (error) {

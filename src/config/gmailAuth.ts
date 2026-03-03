@@ -11,13 +11,13 @@ const SCOPES = [
 function getGoogleCredentials(): Auth.OAuth2Client {
   if (!process.env.CREDENTIALS_JSON) {
     throw new Error(
-      "CREDENTIALS_JSON no está definido en las variables de entorno."
+      "CREDENTIALS_JSON no está definido en las variables de entorno.",
     );
   }
 
   const credentialsJson = Buffer.from(
     process.env.CREDENTIALS_JSON,
-    "base64"
+    "base64",
   ).toString("utf8");
   const credentials = JSON.parse(credentialsJson);
 
@@ -26,7 +26,7 @@ function getGoogleCredentials(): Auth.OAuth2Client {
   return new google.auth.OAuth2(
     client_id,
     client_secret,
-    "urn:ietf:wg:oauth:2.0:oob"
+    "urn:ietf:wg:oauth:2.0:oob",
   );
 }
 
@@ -34,7 +34,7 @@ function getGoogleCredentials(): Auth.OAuth2Client {
 export async function saveTokenToFirestore(
   userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tokens: any
+  tokens: any,
 ): Promise<void> {
   await db
     .collection("users")
@@ -50,7 +50,7 @@ export async function saveTokenToFirestore(
 
 // Obtener el token de Gmail desde Firestore
 export async function getTokenFromFirestore(
-  userId: string
+  userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any | null> {
   const tokenDoc = await db
@@ -79,19 +79,16 @@ export async function authenticate(): Promise<Auth.OAuth2Client> {
   });
 
   return new Promise((resolve) => {
-    rl.question(
-      "Introduce el código de autorización aquí: ",
-      async (code) => {
-        const { tokens } = await oAuth2Client.getToken(code);
+    rl.question("Introduce el código de autorización aquí: ", async (code) => {
+      const { tokens } = await oAuth2Client.getToken(code);
 
-        if (!tokens.access_token) {
-          throw new Error("Error al obtener access_token de Google.");
-        }
-
-        oAuth2Client.setCredentials(tokens);
-        rl.close();
-        resolve(oAuth2Client);
+      if (!tokens.access_token) {
+        throw new Error("Error al obtener access_token de Google.");
       }
-    );
+
+      oAuth2Client.setCredentials(tokens);
+      rl.close();
+      resolve(oAuth2Client);
+    });
   });
 }

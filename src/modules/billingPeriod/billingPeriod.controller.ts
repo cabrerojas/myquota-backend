@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { BillingPeriodService } from "./billingPeriod.service";
+import { CacheService, CacheKeys } from "@/shared/services/cache.service";
 
 export class BillingPeriodController {
   constructor(private readonly service: BillingPeriodService) {}
@@ -21,6 +22,8 @@ export class BillingPeriodController {
   addBillingPeriod = async (req: Request, res: Response): Promise<void> => {
     try {
       const BillingPeriod = await this.service.create(req.body);
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
       res.status(201).json(BillingPeriod);
     } catch (error) {
@@ -70,6 +73,9 @@ export class BillingPeriodController {
         return;
       }
 
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+
       res.status(200).json({
         message: "Periodo de facturación actualizado exitosamente",
         data: updatedBillingPeriod,
@@ -95,6 +101,9 @@ export class BillingPeriodController {
         return;
       }
 
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+
       res
         .status(200)
         .json({ message: "Periodo de facturación eliminado correctamente" });
@@ -111,6 +120,8 @@ export class BillingPeriodController {
     try {
       const { billingPeriodId } = req.params;
       const result = await this.service.payBillingPeriod(billingPeriodId);
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
       res.status(200).json({
         message: `${result.paidCount} cuotas marcadas como pagadas`,

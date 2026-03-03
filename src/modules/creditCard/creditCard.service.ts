@@ -1,6 +1,11 @@
 import { BaseService } from "@/shared/classes/base.service";
 import { CreditCard } from "./creditCard.model";
 import { CreditCardRepository } from "./creditCard.repository";
+import {
+  CacheService,
+  CacheTTL,
+  CacheKeys,
+} from "@/shared/services/cache.service";
 
 export class CreditCardService extends BaseService<CreditCard> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
@@ -16,7 +21,11 @@ export class CreditCardService extends BaseService<CreditCard> {
    * Counts the total number of uncategorized transactions across all
    * credit cards for the current user.
    */
-  async getUncategorizedCount(): Promise<number> {
+  async getUncategorizedCount(userId: string): Promise<number> {
+    const cacheKey = CacheKeys.uncategorizedCount(userId);
+    const cached = CacheService.get<number>(cacheKey);
+    if (cached !== null) return cached;
+
     const creditCards = await this.repository.findAll();
     let count = 0;
 
@@ -32,6 +41,7 @@ export class CreditCardService extends BaseService<CreditCard> {
       }
     }
 
+    CacheService.set(cacheKey, count, CacheTTL.MEDIUM);
     return count;
   }
 }

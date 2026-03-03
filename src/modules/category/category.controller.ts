@@ -1,5 +1,14 @@
 import { Request, Response } from "express";
 import { CategoryService } from "./category.service";
+import { CacheService, CacheKeys } from "@/shared/services/cache.service";
+
+/** Invalidate all category-related cache entries for a user */
+function invalidateCategoryCache(userId?: string): void {
+  CacheService.invalidateByPrefix("global:categories");
+  if (userId) {
+    CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+  }
+}
 
 export class CategoryController {
   constructor(private readonly service: CategoryService) {}
@@ -23,6 +32,7 @@ export class CategoryController {
   addCategory = async (req: Request, res: Response): Promise<void> => {
     try {
       const category = await this.service.create(req.body);
+      invalidateCategoryCache(req.user?.userId);
       res.status(201).json(category);
     } catch (error) {
       console.error("Error adding category:", error);
@@ -43,6 +53,7 @@ export class CategoryController {
         res.status(404).json({ message: "Categoría no encontrada" });
         return;
       }
+      invalidateCategoryCache(req.user?.userId);
       res.status(200).json({
         message: "Categoría actualizada exitosamente",
         data: updatedCategory,
@@ -63,6 +74,7 @@ export class CategoryController {
         res.status(404).json({ message: "Categoría no encontrada" });
         return;
       }
+      invalidateCategoryCache(req.user?.userId);
       res.status(200).json({ message: "Categoría eliminada correctamente" });
     } catch (error) {
       console.error("Error deleting category:", error);
@@ -105,10 +117,6 @@ export class CategoryController {
     try {
       const userId = req.user?.userId;
       const { name, color, icon, isGlobal, merchantName, pattern } = req.body;
-      console.log(
-        `[CategoryController] createCategoryWithMerchant user=${userId} body=`,
-        { name, color, icon, isGlobal, merchantName, pattern },
-      );
       const category = await this.service.createCategoryWithMerchant({
         name,
         color,
@@ -118,6 +126,7 @@ export class CategoryController {
         pattern,
         userId,
       });
+      invalidateCategoryCache(userId);
       res.status(201).json(category);
     } catch (error) {
       console.error("Error creando categoría:", error);
@@ -151,6 +160,7 @@ export class CategoryController {
         pattern,
         userId,
       );
+      invalidateCategoryCache(userId);
       res.status(201).json({ message: "Comercio asociado correctamente" });
     } catch (error) {
       console.error("Error asociando comercio:", error);
@@ -211,6 +221,7 @@ export class CategoryController {
         categoryId,
         userId,
       );
+      invalidateCategoryCache(userId);
       res.status(201).json(newCategory);
     } catch (error) {
       console.error("Error copiando categoría global a usuario:", error);

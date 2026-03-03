@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { CreditCardService } from "./creditCard.service";
+import { CacheService, CacheKeys } from "@/shared/services/cache.service";
 
 export class CreditCardController {
   constructor(private readonly service: CreditCardService) {}
@@ -21,6 +22,8 @@ export class CreditCardController {
   addCreditCard = async (req: Request, res: Response): Promise<void> => {
     try {
       const CreditCard = await this.service.create(req.body);
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
       res.status(201).json(CreditCard);
     } catch (error) {
       console.error("Error adding CreditCard:", error);
@@ -34,7 +37,6 @@ export class CreditCardController {
   getCreditCard = async (req: Request, res: Response): Promise<void> => {
     try {
       const { creditCardId } = req.params;
-      console.log("CreditCardId:", req.params);
       const CreditCard = await this.service.findById(creditCardId);
 
       if (!CreditCard) {
@@ -56,8 +58,6 @@ export class CreditCardController {
     try {
       const { creditCardId } = req.params;
       const updatedData = req.body;
-      console.log("CreditCardId:", creditCardId);
-      console.log("UpdatedData:", updatedData);
       const updatedCreditCard = await this.service.update(
         creditCardId,
         updatedData,
@@ -67,6 +67,9 @@ export class CreditCardController {
         res.status(404).json({ message: "CreditCard no encontrada" });
         return;
       }
+
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
       res.status(200).json({
         message: "CreditCard actualizada exitosamente",
@@ -91,6 +94,9 @@ export class CreditCardController {
         return;
       }
 
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+
       res.status(200).json({ message: "CreditCard eliminada correctamente" });
     } catch (error) {
       console.error("Error deleting CreditCard:", error);
@@ -106,11 +112,16 @@ export class CreditCardController {
    * credit cards for the authenticated user.
    */
   getUncategorizedCount = async (
-    _req: Request,
+    req: Request,
     res: Response,
   ): Promise<void> => {
     try {
-      const count = await this.service.getUncategorizedCount();
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(400).json({ message: "userId es requerido." });
+        return;
+      }
+      const count = await this.service.getUncategorizedCount(userId);
       res.status(200).json({ uncategorizedCount: count });
     } catch (error) {
       console.error("Error getting uncategorized count:", error);

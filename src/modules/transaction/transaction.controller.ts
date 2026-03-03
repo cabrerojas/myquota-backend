@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { TransactionService } from "./transaction.service";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
+import { CacheService, CacheKeys } from "@/shared/services/cache.service";
 
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
@@ -51,6 +52,8 @@ export class TransactionController {
   addTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
       const transaction = await this.service.create(req.body);
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
       res.status(201).json(transaction);
     } catch (error) {
@@ -163,6 +166,10 @@ export class TransactionController {
         }
       }
 
+      const userId2 = req.user?.userId;
+      if (userId2)
+        CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId2));
+
       res.status(200).json({
         message: "Transacción actualizada exitosamente",
         data: responseData,
@@ -186,6 +193,9 @@ export class TransactionController {
         return;
       }
 
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
+
       res.status(200).json({ message: "Transacción eliminada correctamente" });
     } catch (error) {
       console.error("Error deleting transaction:", error);
@@ -204,7 +214,7 @@ export class TransactionController {
       const { creditCardId } = req.params;
 
       if (!creditCardId) {
-        res.status(400).json({ message: "❌ Falta creditCardId." });
+        res.status(400).json({ message: "Falta creditCardId." });
         return;
       }
 
@@ -227,7 +237,7 @@ export class TransactionController {
         !lastPaidMonth ||
         !currency
       ) {
-        res.status(400).json({ message: "❌ Faltan campos requeridos." });
+        res.status(400).json({ message: "Faltan campos requeridos." });
         return;
       }
 
@@ -241,8 +251,12 @@ export class TransactionController {
         currency,
       });
 
+      const manualUserId = req.user?.userId;
+      if (manualUserId)
+        CacheService.invalidateByPrefix(CacheKeys.userPrefix(manualUserId));
+
       res.status(201).json({
-        message: `✅ Transacción manual creada con ${result.quotasCreated} cuotas.`,
+        message: `Transacción manual creada con ${result.quotasCreated} cuotas.`,
         transaction: result.transaction,
         quotasCreated: result.quotasCreated,
       });
@@ -265,9 +279,12 @@ export class TransactionController {
         creditCardId,
         transactionId,
       );
+      const delUserId = req.user?.userId;
+      if (delUserId)
+        CacheService.invalidateByPrefix(CacheKeys.userPrefix(delUserId));
 
       res.status(200).json({
-        message: `✅ Transacción eliminada con ${result.deletedQuotas} cuotas.`,
+        message: `Transacción eliminada con ${result.deletedQuotas} cuotas.`,
         deletedQuotas: result.deletedQuotas,
       });
     } catch (error) {
@@ -306,7 +323,7 @@ export class TransactionController {
         !lastPaidMonth ||
         !currency
       ) {
-        res.status(400).json({ message: "❌ Faltan campos requeridos." });
+        res.status(400).json({ message: "Faltan campos requeridos." });
         return;
       }
 
@@ -324,8 +341,12 @@ export class TransactionController {
         },
       );
 
+      const updUserId = req.user?.userId;
+      if (updUserId)
+        CacheService.invalidateByPrefix(CacheKeys.userPrefix(updUserId));
+
       res.status(200).json({
-        message: `✅ Transacción actualizada con ${result.quotasCreated} cuotas.`,
+        message: `Transacción actualizada con ${result.quotasCreated} cuotas.`,
         transaction: result.transaction,
         quotasCreated: result.quotasCreated,
       });
@@ -391,27 +412,26 @@ export class TransactionController {
     res: Response,
   ): Promise<void> => {
     try {
-      const userId = req.user?.userId; // 📌 Ahora el `userId` viene del JWT
+      const userId = req.user?.userId;
 
       if (!userId) {
-        res.status(400).json({ message: "❌ Token invalido." });
+        res.status(400).json({ message: "Token invalido." });
         return;
       }
 
       const { importedCount } = await this.service.fetchBankEmails(userId);
 
-      // 🔹 Auto-inicializar quotas para transacciones que no las tengan (idempotente)
       const { creditCardId } = req.params;
       const quotasCreated =
         await this.service.initializeQuotasForAllTransactions(creditCardId);
 
-      // 🔹 Verificar transacciones huérfanas (sin período de facturación)
       const { orphanedTransactions, suggestedPeriod } =
         await this.service.checkOrphanedTransactions();
 
-      // 🔹 Contar transacciones sin categoría en esta tarjeta
       const allTx = await this.service.findAll();
       const uncategorizedCount = allTx.filter((tx) => !tx.categoryId).length;
+
+      CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
       res.status(200).json({
         message: "Transacciones importadas exitosamente",
@@ -441,18 +461,20 @@ export class TransactionController {
     try {
       const quotasCreated =
         await this.service.initializeQuotasForAllTransactions(creditCardId);
+      const userId = req.user?.userId;
+      if (userId) CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
       res.status(200).json({
         message:
-          "✅ Cuotas creadas para todas las transacciones que no las tenían previamente.",
+          "Cuotas creadas para todas las transacciones que no las tenían previamente.",
         quotasCreated,
       });
     } catch (error) {
       console.error(
-        "❌ Error al inicializar cuotas para todas las transacciones:",
+        "Error al inicializar cuotas para todas las transacciones:",
         error,
       );
       res.status(500).json({
-        message: "❌ Error al inicializar cuotas para todas las transacciones",
+        message: "Error al inicializar cuotas para todas las transacciones",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -469,12 +491,9 @@ export class TransactionController {
         await this.service.getMonthlyQuotaSum(creditCardId);
       res.status(200).json(monthlyQuotaSum);
     } catch (error) {
-      console.error(
-        "❌ Error al obtener la sumatoria de cuotas por mes:",
-        error,
-      );
+      console.error("Error al obtener la sumatoria de cuotas por mes:", error);
       res.status(500).json({
-        message: "❌ Error al obtener la sumatoria de cuotas por mes",
+        message: "Error al obtener la sumatoria de cuotas por mes",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }

@@ -3,14 +3,21 @@ import { BaseService } from "@/shared/classes/base.service";
 import { Category } from "./category.model";
 import { CategoryRepository } from "./category.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import {
+  CacheService,
+  CacheTTL,
+  CacheKeys,
+} from "@/shared/services/cache.service";
 
 export class CategoryService extends BaseService<Category> {
   private globalRepository: CategoryRepository;
   private userRepository?: CategoryRepository;
+  private userId?: string;
 
   constructor(userId?: string) {
     super(new CategoryRepository(userId));
     this.globalRepository = new CategoryRepository();
+    this.userId = userId;
     if (userId) {
       this.userRepository = new CategoryRepository(userId);
     }
@@ -19,6 +26,14 @@ export class CategoryService extends BaseService<Category> {
   async getAllCategories(options?: {
     deduplicate?: boolean;
   }): Promise<Category[]> {
+    const dedup = options?.deduplicate ? ":dedup" : "";
+    const cacheKey = this.userId
+      ? `${CacheKeys.userCategories(this.userId)}${dedup}`
+      : `${CacheKeys.globalCategories()}${dedup}`;
+
+    const cached = CacheService.get<Category[]>(cacheKey);
+    if (cached !== null) return cached;
+
     const [global, user] = await Promise.all([
       this.globalRepository.findAll(),
       this.userRepository ? this.userRepository.findAll() : Promise.resolve([]),
@@ -26,7 +41,10 @@ export class CategoryService extends BaseService<Category> {
 
     const all = [...global, ...user];
 
-    if (!options?.deduplicate) return all;
+    if (!options?.deduplicate) {
+      CacheService.set(cacheKey, all, CacheTTL.LONG);
+      return all;
+    }
 
     // Deduplicate by normalizedName — personal categories take priority
     const seen = new Map<string, Category>();
@@ -40,7 +58,9 @@ export class CategoryService extends BaseService<Category> {
         seen.set(key, cat);
       }
     }
-    return Array.from(seen.values());
+    const deduplicated = Array.from(seen.values());
+    CacheService.set(cacheKey, deduplicated, CacheTTL.LONG);
+    return deduplicated;
   }
 
   /**

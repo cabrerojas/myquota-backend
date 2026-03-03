@@ -2,6 +2,29 @@ import { TransactionRepository } from "@/modules/transaction/transaction.reposit
 import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 import { convertUtcToChileTime } from "@/shared/utils/date.utils";
+import {
+  CacheService,
+  CacheTTL,
+  CacheKeys,
+} from "@/shared/services/cache.service";
+
+interface DebtSummary {
+  totalCLP: number;
+  totalUSD: number;
+  pendingCount: number;
+  monthsRemaining: number;
+  nextMonthCLP: number;
+  nextMonthUSD: number;
+}
+
+interface MonthlyStatEntry {
+  month: string;
+  totalCLP: number;
+  totalDolar: number;
+  categoryBreakdown: {
+    [category: string]: { CLP: number; Dolar: number };
+  };
+}
 
 export class StatsService {
   constructor(
@@ -9,7 +32,11 @@ export class StatsService {
     private billingPeriodRepository: BillingPeriodRepository,
   ) {}
 
-  static async getGlobalDebtSummary(userId: string) {
+  static async getGlobalDebtSummary(userId: string): Promise<DebtSummary> {
+    const cacheKey = CacheKeys.debtSummary(userId);
+    const cached = CacheService.get<DebtSummary>(cacheKey);
+    if (cached !== null) return cached;
+
     const creditCardRepo = new CreditCardRepository(userId);
     const cards = await creditCardRepo.findAll();
 
@@ -109,7 +136,7 @@ export class StatsService {
       }),
     );
 
-    return {
+    const result: DebtSummary = {
       totalCLP,
       totalUSD,
       pendingCount,
@@ -117,9 +144,16 @@ export class StatsService {
       nextMonthCLP,
       nextMonthUSD,
     };
+
+    CacheService.set(cacheKey, result, CacheTTL.LONG);
+    return result;
   }
 
-  async getMonthlyStats(_userId: string, _creditCardId: string) {
+  async getMonthlyStats(userId: string, creditCardId: string) {
+    const cacheKey = CacheKeys.monthlyStats(userId, creditCardId);
+    const cached = CacheService.get<MonthlyStatEntry[]>(cacheKey);
+    if (cached !== null) return cached;
+
     // Obtener los BillingPeriods para la tarjeta de crédito
     const billingPeriods = await this.billingPeriodRepository.findAll();
 
@@ -190,14 +224,16 @@ export class StatsService {
       });
     }
 
-    // 🔹 Convertir a un array de respuesta
-    return Object.entries(billingStats)
+    const monthlyStats = Object.entries(billingStats)
       .map(([month, data]) => ({
         month,
         totalCLP: data.totalCLP,
         totalDolar: data.totalDolar,
         categoryBreakdown: data.categoryBreakdown,
       }))
-      .filter((entry) => entry.totalCLP > 0 || entry.totalDolar > 0); // Filtrar meses sin transacciones
+      .filter((entry) => entry.totalCLP > 0 || entry.totalDolar > 0);
+
+    CacheService.set(cacheKey, monthlyStats, CacheTTL.LONG);
+    return monthlyStats;
   }
 }

@@ -8,23 +8,21 @@ import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.reposito
 const createTransactionRouter = (): Router => {
   const router = Router();
 
-  // 📌 Middleware para validar JWT y extraer `creditCardId` de la URL
   router.use(
     "/creditCards/:creditCardId/transactions",
-    authenticate, // 🔥 Primero validamos el JWT
+    authenticate,
     (req: Request, res: Response, next: NextFunction) => {
       const { creditCardId } = req.params;
-      const userId = req.user?.userId; // 🔥 Extraer `userId` del JWT
+      const userId = req.user?.userId;
 
       if (!userId || !creditCardId) {
         res.status(400).json({
-          message: "❌ creditCardId es requerido en la URL.",
+          message: "creditCardId es requerido en la URL.",
         });
         return;
       }
 
       try {
-        // 📌 Crear repositorios con `userId` desde JWT
         const transactionRepository = new TransactionRepository(
           userId,
           creditCardId,
@@ -42,15 +40,14 @@ const createTransactionRouter = (): Router => {
         res.locals.transactionController = controller;
         next();
       } catch (error) {
-        console.error("❌ Error en el middleware de Transaction:", error);
+        console.error("Error en el middleware de Transaction:", error);
         res.status(500).json({
-          message: "❌ Error interno en la configuración de Transaction.",
+          message: "Error interno en la configuración de Transaction.",
         });
       }
     },
   );
 
-  // 📌 Definir rutas usando `res.locals.transactionController`
   router.get(
     "/creditCards/:creditCardId/transactions",
     (req: Request, res: Response) => {
