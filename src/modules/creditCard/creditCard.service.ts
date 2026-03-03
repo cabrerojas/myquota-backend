@@ -42,8 +42,7 @@ export class CreditCardService extends BaseService<CreditCard> {
         .get();
       if (doc.exists) {
         const raw = doc.data()!;
-        const ageMs =
-          Date.now() - new Date(raw.computedAt as string).getTime();
+        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
         if (ageMs < 30 * 60 * 1000) {
           const count = raw.data as number;
           CacheService.set(cacheKey, count, CacheTTL.MEDIUM);

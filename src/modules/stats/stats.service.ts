@@ -22,6 +22,8 @@ interface DebtSummary {
   monthsRemaining: number;
   nextMonthCLP: number;
   nextMonthUSD: number;
+  /** Per-billing-period breakdown sorted chronologically, used for the 3-month preview in the dashboard. */
+  monthlyBreakdown: { month: string; CLP: number; USD: number }[];
 }
 
 interface MonthlyStatEntry {
@@ -85,8 +87,10 @@ export class StatsService {
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        if (ageMs < SUMMARY_MAX_AGE_MS) {
-          const summary = raw.data as DebtSummary;
+        const summary = raw.data as DebtSummary;
+        // Migration guard: skip L2 if the persisted doc is missing monthlyBreakdown
+        // (written before this field was added). Forces a one-time L3 recompute.
+        if (ageMs < SUMMARY_MAX_AGE_MS && Array.isArray(summary?.monthlyBreakdown)) {
           CacheService.set(memKey, summary, CacheTTL.LONG);
           return summary;
         }
@@ -119,7 +123,10 @@ export class StatsService {
     let pendingCount = 0;
     let nextMonthCLP = 0;
     let nextMonthUSD = 0;
-    const periodKeys = new Set<string>();
+    const periodAmounts = new Map<
+      string,
+      { CLP: number; USD: number; sortKey: number }
+    >();
 
     // Collect all billing periods across all cards
     const allBillingPeriods: {
@@ -178,18 +185,24 @@ export class StatsService {
             const dueDate = new Date(q.due_date as unknown as string);
             const calKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
 
-            if (periodMonth) {
-              periodKeys.add(periodMonth);
-            } else {
-              // Fallback: calendar month key for quotas outside billing periods
-              periodKeys.add(calKey);
+            const bucketKey = periodMonth ?? calKey;
+            const bucket = periodAmounts.get(bucketKey) ?? {
+              CLP: 0,
+              USD: 0,
+              sortKey: dueTime,
+            };
+            if (!periodAmounts.has(bucketKey)) {
+              periodAmounts.set(bucketKey, bucket);
             }
-
             if (q.currency === "Dolar") {
+              bucket.USD += q.amount;
               totalUSD += q.amount;
             } else {
+              bucket.CLP += q.amount;
               totalCLP += q.amount;
             }
+            // Keep sortKey as the earliest due_date in this bucket
+            if (dueTime < bucket.sortKey) bucket.sortKey = dueTime;
 
             // Next payment = quotas in current billing period or current calendar month
             const nowDate = new Date();
@@ -210,13 +223,18 @@ export class StatsService {
       }),
     );
 
+    const monthlyBreakdown = Array.from(periodAmounts.entries())
+      .sort((a, b) => a[1].sortKey - b[1].sortKey)
+      .map(([month, { CLP, USD }]) => ({ month, CLP, USD }));
+
     const result: DebtSummary = {
       totalCLP,
       totalUSD,
       pendingCount,
-      monthsRemaining: periodKeys.size,
+      monthsRemaining: periodAmounts.size,
       nextMonthCLP,
       nextMonthUSD,
+      monthlyBreakdown,
     };
 
     return result;
@@ -369,9 +387,7 @@ export class StatsService {
     let count = 0;
     for (const card of creditCards) {
       const txCollection = ccRepo.getTransactionsCollection(card.id);
-      const snapshot = await txCollection
-        .where("deletedAt", "==", null)
-        .get();
+      const snapshot = await txCollection.where("deletedAt", "==", null).get();
       for (const doc of snapshot.docs) {
         if (!doc.data().categoryId) count++;
       }
