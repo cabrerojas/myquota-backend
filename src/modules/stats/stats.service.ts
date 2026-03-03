@@ -108,7 +108,9 @@ export class StatsService {
   // Pure compute methods (no caching — separated for reuse in triggerRecompute)
   // ---------------------------------------------------------------------------
 
-  private static async _computeDebtSummary(userId: string): Promise<DebtSummary> {
+  private static async _computeDebtSummary(
+    userId: string,
+  ): Promise<DebtSummary> {
     const creditCardRepo = new CreditCardRepository(userId);
     const cards = await creditCardRepo.findAll();
 
@@ -241,7 +243,10 @@ export class StatsService {
 
     // L2: Firestore materialized view (1 read)
     try {
-      const doc = await StatsService.monthlyStatsRef(userId, creditCardId).get();
+      const doc = await StatsService.monthlyStatsRef(
+        userId,
+        creditCardId,
+      ).get();
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();

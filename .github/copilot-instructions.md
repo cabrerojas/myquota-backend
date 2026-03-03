@@ -848,6 +848,7 @@ POST/PUT/DELETE request:
 ### Cuándo usar este patrón
 
 Aplicar cuando **TODAS** estas condiciones se cumplen:
+
 1. El resultado requiere **más de 50 reads** de Firestore
 2. El resultado **solo cambia cuando el usuario escribe datos** (no con el tiempo)
 3. El endpoint se llama con **frecuencia alta** (Dashboard, stats, counts)
@@ -861,15 +862,18 @@ Aplicar cuando **TODAS** estas condiciones se cumplen:
 
 ### Summaries disponibles actualmente
 
-| Summary        | Path en Firestore                                                  | Lógica de cómputo         |
-| -------------- | ------------------------------------------------------------------ | ------------------------- |
-| `debtSummary`  | `users/{userId}/summaries/debtSummary`                             | `StatsService`            |
-| `monthlyStats` | `users/{userId}/creditCards/{creditCardId}/summaries/monthlyStats` | `StatsService`            |
+| Summary        | Path en Firestore                                                  | Lógica de cómputo |
+| -------------- | ------------------------------------------------------------------ | ----------------- |
+| `debtSummary`  | `users/{userId}/summaries/debtSummary`                             | `StatsService`    |
+| `monthlyStats` | `users/{userId}/creditCards/{creditCardId}/summaries/monthlyStats` | `StatsService`    |
 
 Estructura del documento Firestore:
+
 ```json
 {
-  "data": { /* DebtSummary | MonthlyStatEntry[] | etc. */ },
+  "data": {
+    /* DebtSummary | MonthlyStatEntry[] | etc. */
+  },
   "computedAt": "2025-03-03T10:00:00.000Z"
 }
 ```
@@ -877,6 +881,7 @@ Estructura del documento Firestore:
 ### Implementación — guía paso a paso
 
 **1. Agregar ref helpers privados estáticos al service:**
+
 ```typescript
 private static mySummaryRef(userId: string) {
   return db
@@ -886,6 +891,7 @@ private static mySummaryRef(userId: string) {
 ```
 
 **2. Separar el cómputo puro en un método privado:**
+
 ```typescript
 private static async _computeMySummary(userId: string): Promise<MySummary> {
   // ... lógica con reads de Firestore. Sin caching aquí.
@@ -893,6 +899,7 @@ private static async _computeMySummary(userId: string): Promise<MySummary> {
 ```
 
 **3. Método público con 3 niveles (L1 → L2 → L3):**
+
 ```typescript
 static async getMySummary(userId: string): Promise<MySummary> {
   // L1: memoria
@@ -928,6 +935,7 @@ static async getMySummary(userId: string): Promise<MySummary> {
 ```
 
 **4. Controllers: usar `StatsService.triggerRecompute` después de cada write:**
+
 ```typescript
 // ✅ Correcto — en lugar de CacheService.invalidateByPrefix(...)
 const userId = req.user?.userId;
@@ -935,6 +943,7 @@ if (userId) StatsService.triggerRecompute(userId, req.params.creditCardId);
 ```
 
 **`triggerRecompute(userId, creditCardId?)`** hace dos cosas:
+
 1. Invalida L1 inmediatamente (síncrono)
 2. Dispara recompute de todos los summaries relevantes en background (sin bloquear la respuesta)
 
