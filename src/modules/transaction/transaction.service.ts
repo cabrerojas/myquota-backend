@@ -122,8 +122,19 @@ export class TransactionService extends BaseService<Transaction> {
       let batchData: Transaction[] = [];
       let totalImported = 0;
 
-      // Instanciar el servicio de categorías una vez para usar durante el proceso
+      // Pre-cargar el mapa de merchants UNA sola vez para todos los correos.
+      // Costo fijo: N_categories reads. Sin esto sería N_emails × N_categories reads.
       const categoryService = new CategoryService();
+      let merchantMap: Map<
+        string,
+        { categoryId: string; categoryName: string }
+      >;
+      try {
+        merchantMap = await categoryService.buildMerchantCategoryMap();
+      } catch (err) {
+        console.error("Error pre-cargando merchant map:", err);
+        merchantMap = new Map();
+      }
 
       for (const chunk of chunks) {
         await Promise.all(
@@ -170,15 +181,13 @@ export class TransactionService extends BaseService<Transaction> {
                   creditCardId: "",
                 };
 
-                // Intentar hacer matching por merchant y anexar categoryId si existe
-                try {
-                  const match =
-                    await categoryService.findCategoryByMerchant(merchant);
-                  if (match) {
-                    transactionData.categoryId = match.categoryId;
-                  }
-                } catch (err) {
-                  console.warn("Error buscando categoría por merchant:", err);
+                // Lookup en el mapa pre-cargado — sin reads adicionales
+                const match = CategoryService.matchMerchantInMap(
+                  merchant,
+                  merchantMap,
+                );
+                if (match) {
+                  transactionData.categoryId = match.categoryId;
                 }
 
                 batchData.push(transactionData);
@@ -205,7 +214,9 @@ export class TransactionService extends BaseService<Transaction> {
    * Detecta transacciones que no caen dentro de ningún período de facturación
    * y sugiere el siguiente período basado en el patrón existente.
    */
-  async checkOrphanedTransactions(): Promise<{
+  async checkOrphanedTransactions(
+    preloadedTransactions?: Transaction[],
+  ): Promise<{
     orphanedTransactions: Transaction[];
     suggestedPeriod: {
       month: string;
@@ -214,7 +225,9 @@ export class TransactionService extends BaseService<Transaction> {
     } | null;
   }> {
     const billingPeriods = await this.billingPeriodRepository.findAll();
-    const transactions = await this.repository.findAll();
+    // Reutilizar lista pre-cargada si viene del flujo de import, evitando un findAll() extra
+    const transactions =
+      preloadedTransactions ?? (await this.repository.findAll());
 
     if (!transactions.length) {
       return { orphanedTransactions: [], suggestedPeriod: null };
@@ -318,6 +331,45 @@ export class TransactionService extends BaseService<Transaction> {
     }
 
     return { orphanedTransactions, suggestedPeriod };
+  }
+
+  /**
+   * Flujo completo de importación optimizado.
+   * Comparte un único findAll() entre initializeQuotas y checkOrphans,
+   * eliminando la lectura duplicada que ocurría al llamarlos por separado.
+   *
+   * Costo vs llamadas individuales: −1 findAll() de transacciones por import.
+   */
+  async runImportFlow(
+    userId: string,
+    creditCardId: string,
+  ): Promise<{
+    importedCount: number;
+    quotasCreated: number;
+    orphanedTransactions: Transaction[];
+    suggestedPeriod: {
+      month: string;
+      startDate: string;
+      endDate: string;
+    } | null;
+  }> {
+    const { importedCount } = await this.fetchBankEmails(userId);
+
+    // UN solo findAll() compartido por initializeQuotas y checkOrphans
+    const transactions = await this.repository.findAll();
+
+    const [quotasCreated, { orphanedTransactions, suggestedPeriod }] =
+      await Promise.all([
+        this.initializeQuotasForAllTransactions(creditCardId, transactions),
+        this.checkOrphanedTransactions(transactions),
+      ]);
+
+    return {
+      importedCount,
+      quotasCreated,
+      orphanedTransactions,
+      suggestedPeriod,
+    };
   }
 
   // Función recursiva para buscar contenido HTML o texto plano en partes anidadas
@@ -563,13 +615,11 @@ export class TransactionService extends BaseService<Transaction> {
 
   async initializeQuotasForAllTransactions(
     creditCardId: string,
+    preloadedTransactions?: Transaction[],
   ): Promise<number> {
-    console.log(
-      `📌 Inicializando cuotas para la tarjeta de crédito: ${creditCardId}`,
-    );
-
-    // Obtener todas las transacciones de la tarjeta de crédito
-    const transactions = await this.repository.findAll();
+    // Reutilizar lista pre-cargada si viene del flujo de import, evitando un findAll() extra
+    const transactions =
+      preloadedTransactions ?? (await this.repository.findAll());
 
     if (!transactions.length) {
       console.warn("⚠️ No se encontraron transacciones para procesar.");

@@ -418,14 +418,16 @@ export class TransactionController {
         return;
       }
 
-      const { importedCount } = await this.service.fetchBankEmails(userId);
-
       const { creditCardId } = req.params;
-      const quotasCreated =
-        await this.service.initializeQuotasForAllTransactions(creditCardId);
 
-      const { orphanedTransactions, suggestedPeriod } =
-        await this.service.checkOrphanedTransactions();
+      // runImportFlow: fetchBankEmails + initializeQuotas + checkOrphans
+      // compartiendo un único findAll(), optimizando reads vs llamadas separadas
+      const {
+        importedCount,
+        quotasCreated,
+        orphanedTransactions,
+        suggestedPeriod,
+      } = await this.service.runImportFlow(userId, creditCardId);
 
       StatsService.triggerRecompute(userId, creditCardId);
 

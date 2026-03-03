@@ -81,7 +81,9 @@ export class CategoryService extends BaseService<Category> {
   }
 
   /**
-   * Busca un match automático de categoría para un nombre de comercio
+   * Busca un match automático de categoría para un nombre de comercio.
+   * Costo: 1 read (categorías globales) + N_categories reads (merchants).
+   * Para procesar múltiples merchants, preferir buildMerchantCategoryMap().
    */
   async findCategoryByMerchant(
     merchantName: string,
@@ -93,6 +95,48 @@ export class CategoryService extends BaseService<Category> {
       if (match) {
         return { categoryId: category.id, categoryName: category.name };
       }
+    }
+    return null;
+  }
+
+  /**
+   * Pre-carga todos los patrones de merchants en un Map para búsquedas O(1).
+   * Usar en lugar de llamar findCategoryByMerchant() una vez por merchant.
+   *
+   * Costo: 1 read (categorías globales) + N_categories reads (subcol. merchants)
+   * vs findCategoryByMerchant por email: N_emails × (1 + N_categories) reads.
+   */
+  async buildMerchantCategoryMap(): Promise<
+    Map<string, { categoryId: string; categoryName: string }>
+  > {
+    const categories = await this.globalRepository.findAll();
+    const map = new Map<string, { categoryId: string; categoryName: string }>();
+    await Promise.all(
+      categories.map(async (category) => {
+        const merchantService = new MerchantPatternService(category.id);
+        const patterns = await merchantService.getAllPatterns();
+        for (const p of patterns) {
+          if (p.pattern) {
+            map.set(p.pattern.toUpperCase(), {
+              categoryId: category.id,
+              categoryName: category.name,
+            });
+          }
+        }
+      }),
+    );
+    return map;
+  }
+
+  /**
+   * Busca el match de un merchant en un mapa pre-cargado (sin reads de Firestore).
+   */
+  static matchMerchantInMap(
+    merchantName: string,
+    map: Map<string, { categoryId: string; categoryName: string }>,
+  ): { categoryId: string; categoryName: string } | null {
+    for (const [pattern, cat] of map) {
+      if (merchantName.toUpperCase().includes(pattern)) return cat;
     }
     return null;
   }

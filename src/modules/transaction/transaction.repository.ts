@@ -76,11 +76,12 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
 
   // Obtener IDs de transacciones existentes en Firestore y en CreditCard
   async getExistingTransactionIds(ids: string[]): Promise<string[]> {
+    // Cargar tarjetas UNA sola vez fuera del loop de chunks
+    const creditCards = await this.creditCardRepository.findAll();
     const chunks = chunkArray(ids, 10);
     const results = await Promise.all(
       chunks.map(async (chunk) => {
         const creditCardTransactionIds: string[] = [];
-        const creditCards = await this.creditCardRepository.findAll();
         for (const creditCard of creditCards) {
           const transactionsCollection =
             this.creditCardRepository.getTransactionsCollection(creditCard.id);
@@ -92,7 +93,6 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
             ...transactionSnapshot.docs.map((doc) => doc.id),
           );
         }
-
         return creditCardTransactionIds;
       }),
     );
