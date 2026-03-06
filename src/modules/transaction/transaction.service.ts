@@ -230,9 +230,9 @@ export class TransactionService extends BaseService<Transaction> {
       ),
     }));
 
-    // Encontrar transacciones huérfanas
+    // Encontrar transacciones huérfanas (excluir manuales: no tienen período asociado por diseño)
     const orphanedTransactions = transactions.filter((tx) => {
-      if (!tx.transactionDate) return false;
+      if (!tx.transactionDate || tx.source === "manual") return false;
       const txDate = new Date(
         convertUtcToChileTime(tx.transactionDate, "yyyy-MM-dd HH:mm:ss"),
       );
