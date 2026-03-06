@@ -43,7 +43,8 @@ export class CreditCardService extends BaseService<CreditCard> {
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        if (ageMs < 30 * 60 * 1000) {
+        const isStale = raw.needsRecompute === true || ageMs >= 30 * 60 * 1000;
+        if (!isStale) {
           const count = raw.data as number;
           CacheService.set(cacheKey, count, CacheTTL.MEDIUM);
           return count;
@@ -64,6 +65,16 @@ export class CreditCardService extends BaseService<CreditCard> {
         if (!doc.data().categoryId) count++;
       }
     }
+
+    // Persist back to L2 so the stale marker is cleared and the next read is fast.
+    db.collection("users")
+      .doc(userId)
+      .collection("summaries")
+      .doc("uncategorizedCount")
+      .set({ data: count, computedAt: new Date().toISOString() })
+      .catch((err) =>
+        console.error("[uncategorizedCount] L2 persist failed:", err),
+      );
 
     CacheService.set(cacheKey, count, CacheTTL.MEDIUM);
     return count;

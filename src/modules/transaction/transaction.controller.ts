@@ -167,8 +167,18 @@ export class TransactionController {
         }
       }
 
-      if (userId)
-        StatsService.triggerRecompute(userId, req.params.creditCardId);
+      if (userId) {
+        // If only categoryId changed, use lazy invalidation (cheap writes, 0 reads).
+        // The recompute fires naturally when the user next visits the affected report.
+        // For structural changes (amount, date, merchant, etc.) do a full eager recompute.
+        const isCategoryOnlyUpdate =
+          Object.keys(updatedData).length === 1 && "categoryId" in updatedData;
+        if (isCategoryOnlyUpdate) {
+          StatsService.triggerInvalidateOnly(userId, req.params.creditCardId);
+        } else {
+          StatsService.triggerRecompute(userId, req.params.creditCardId);
+        }
+      }
 
       res.status(200).json({
         message: "Transacción actualizada exitosamente",

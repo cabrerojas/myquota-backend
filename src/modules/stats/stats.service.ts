@@ -273,7 +273,9 @@ export class StatsService {
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        if (ageMs < SUMMARY_MAX_AGE_MS && raw.schemaVersion === 2) {
+        const isStale =
+          raw.needsRecompute === true || ageMs >= SUMMARY_MAX_AGE_MS;
+        if (!isStale && raw.schemaVersion === 2) {
           const stats = raw.data as MonthlyStatEntry[];
           CacheService.set(memKey, stats, CacheTTL.LONG);
           return stats;
@@ -414,16 +416,17 @@ export class StatsService {
     return count;
   }
 
-  // triggerRecompute — called by controllers after any write operation
+  // triggerRecompute / triggerInvalidateOnly — called by controllers after writes
   // ---------------------------------------------------------------------------
 
   /**
    * Invalidates L1 memory cache immediately, then fires async Firestore
    * recomputes so the next GET serves fresh data from L2 (1 read).
    *
-   * Use this instead of CacheService.invalidateByPrefix after writes.
+   * Use for structural writes: creating/deleting transactions, changing amounts.
+   * For category-only changes, use triggerInvalidateOnly instead.
    *
-   * @param userId     - The authenticated user
+   * @param userId       - The authenticated user
    * @param creditCardId - The card being modified (triggers monthly stats recompute)
    */
   static triggerRecompute(userId: string, creditCardId?: string): void {
@@ -471,6 +474,51 @@ export class StatsService {
         )
         .catch((err) =>
           console.error("[recompute] monthly stats failed:", err),
+        );
+    }
+  }
+
+  /**
+   * Lazy invalidation — marks affected Firestore summaries as stale with a
+   * single cheap write, then lets the next GET trigger a recompute naturally.
+   *
+   * Use for category-only changes. Assigning N categories = N × 2 cheap writes
+   * + 0 recomputes. The recompute fires exactly once, when the user navigates
+   * to the report that needs fresh data.
+   *
+   * Summaries affected by a category change:
+   *  - uncategorizedCount  → count decreases by 1 when a category is assigned
+   *  - monthlyStats        → categoryBreakdown changes (pie chart)
+   *
+   * Not affected (intentionally skipped):
+   *  - debtSummary  → amounts/quotas don't change when only categoryId changes
+   *
+   * @param userId       - The authenticated user
+   * @param creditCardId - The card whose transaction was updated
+   */
+  static triggerInvalidateOnly(userId: string, creditCardId?: string): void {
+    // Invalidate L1 for the affected keys (always fast, 0 Firestore reads)
+    CacheService.invalidate(CacheKeys.uncategorizedCount(userId));
+    if (creditCardId) {
+      CacheService.invalidate(CacheKeys.monthlyStats(userId, creditCardId));
+    }
+
+    // Mark uncategorizedCount L2 as stale → next read will recompute
+    StatsService.uncategorizedCountRef(userId)
+      .set({ needsRecompute: true }, { merge: true })
+      .catch((err) =>
+        console.error(
+          "[invalidate] uncategorizedCount stale mark failed:",
+          err,
+        ),
+      );
+
+    // Mark monthlyStats L2 as stale → next read will recompute
+    if (creditCardId) {
+      StatsService.monthlyStatsRef(userId, creditCardId)
+        .set({ needsRecompute: true }, { merge: true })
+        .catch((err) =>
+          console.error("[invalidate] monthlyStats stale mark failed:", err),
         );
     }
   }
