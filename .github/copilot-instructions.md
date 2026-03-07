@@ -16,65 +16,64 @@ Guía para agentes de IA que trabajan en `myquota-backend`. Para patrones detall
 
 ### MyQuota-Specific Skills
 
-| Skill | Descripción | URL |
-|-------|-------------|-----|
-| `myquota-module` | Crear módulos completos (model→routes) con templates | [SKILL.md](skills/myquota-module/SKILL.md) |
-| `myquota-repository` | FirestoreRepository patterns, paths, subcolecciones | [SKILL.md](skills/myquota-repository/SKILL.md) |
-| `myquota-service` | BaseService patterns, inyección de dependencias | [SKILL.md](skills/myquota-service/SKILL.md) |
-| `myquota-controller` | Controllers con arrow functions y try/catch | [SKILL.md](skills/myquota-controller/SKILL.md) |
-| `myquota-routes` | DI por request con res.locals, authenticate | [SKILL.md](skills/myquota-routes/SKILL.md) |
-| `myquota-auth` | JWT flow, middleware, type augmentation | [SKILL.md](skills/myquota-auth/SKILL.md) |
-| `myquota-dates` | Chile timezone, ISO strings, date.utils | [SKILL.md](skills/myquota-dates/SKILL.md) |
-| `myquota-cache` | 3-level cache (L1→L2→L3), vistas materializadas | [SKILL.md](skills/myquota-cache/SKILL.md) |
-| `sync-types` | Sincronizar tipos backend→frontend | [SKILL.md](skills/sync-types/SKILL.md) |
+| Skill                | Descripción                                          | URL                                            |
+| -------------------- | ---------------------------------------------------- | ---------------------------------------------- |
+| `myquota-module`     | Crear módulos completos (model→routes) con templates | [SKILL.md](skills/myquota-module/SKILL.md)     |
+| `myquota-repository` | FirestoreRepository patterns, paths, subcolecciones  | [SKILL.md](skills/myquota-repository/SKILL.md) |
+| `myquota-service`    | BaseService patterns, inyección de dependencias      | [SKILL.md](skills/myquota-service/SKILL.md)    |
+| `myquota-controller` | Controllers con arrow functions y try/catch          | [SKILL.md](skills/myquota-controller/SKILL.md) |
+| `myquota-routes`     | DI por request con res.locals, authenticate          | [SKILL.md](skills/myquota-routes/SKILL.md)     |
+| `myquota-auth`       | JWT flow, middleware, type augmentation              | [SKILL.md](skills/myquota-auth/SKILL.md)       |
+| `myquota-dates`      | Chile timezone, ISO strings, date.utils              | [SKILL.md](skills/myquota-dates/SKILL.md)      |
+| `myquota-cache`      | 3-level cache (L1→L2→L3), vistas materializadas      | [SKILL.md](skills/myquota-cache/SKILL.md)      |
+| `sync-types`         | Sincronizar tipos backend→frontend                   | [SKILL.md](skills/sync-types/SKILL.md)         |
 
 ### Meta Skills
 
-| Skill | Descripción | URL |
-|-------|-------------|-----|
+| Skill        | Descripción                                | URL                                    |
+| ------------ | ------------------------------------------ | -------------------------------------- |
 | `skill-sync` | Sincroniza Auto-invoke tables en AGENTS.md | [SKILL.md](skills/skill-sync/SKILL.md) |
 
 ### Auto-invoke Skills
 
 When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 
-| Action | Skill |
-|--------|-------|
-| Creating a new module | `myquota-module` |
-| Creating a repository | `myquota-repository` |
-| Creating a service | `myquota-service` |
-| Creating a controller | `myquota-controller` |
-| Adding an endpoint | `myquota-controller` |
-| Handling errors in controllers | `myquota-controller` |
-| Creating routes | `myquota-routes` |
-| Configuring authentication | `myquota-routes` |
-| Setting up dependency injection | `myquota-routes` |
-| Working with JWT auth | `myquota-auth` |
-| Implementing authentication | `myquota-auth` |
-| Handling refresh tokens | `myquota-auth` |
-| Working with dates | `myquota-dates` |
-| Handling Chile timezone | `myquota-dates` |
-| Serializing timestamps | `myquota-dates` |
-| Implementing caching | `myquota-cache` |
-| Creating materialized views | `myquota-cache` |
-| Optimizing expensive reads | `myquota-cache` |
-| Modifying backend models | `sync-types` |
-| Syncing types with frontend | `sync-types` |
-| Adding fields to entities | `sync-types` |
+| Action                          | Skill                |
+| ------------------------------- | -------------------- |
+| Creating a new module           | `myquota-module`     |
+| Creating a repository           | `myquota-repository` |
+| Creating a service              | `myquota-service`    |
+| Creating a controller           | `myquota-controller` |
+| Adding an endpoint              | `myquota-controller` |
+| Handling errors in controllers  | `myquota-controller` |
+| Creating routes                 | `myquota-routes`     |
+| Configuring authentication      | `myquota-routes`     |
+| Setting up dependency injection | `myquota-routes`     |
+| Working with JWT auth           | `myquota-auth`       |
+| Implementing authentication     | `myquota-auth`       |
+| Handling refresh tokens         | `myquota-auth`       |
+| Working with dates              | `myquota-dates`      |
+| Handling Chile timezone         | `myquota-dates`      |
+| Serializing timestamps          | `myquota-dates`      |
+| Implementing caching            | `myquota-cache`      |
+| Creating materialized views     | `myquota-cache`      |
+| Optimizing expensive reads      | `myquota-cache`      |
+| Modifying backend models        | `sync-types`         |
+| Syncing types with frontend     | `sync-types`         |
+| Adding fields to entities       | `sync-types`         |
 
-<!-- Skills extracted from metadata.auto_invoke in each SKILL.md -->
----
+## <!-- Skills extracted from metadata.auto_invoke in each SKILL.md -->
 
 ## Tech Stack (Quick Reference)
 
-| Dato | Valor |
-|------|-------|
-| Runtime | Node 22 + Express 4 |
-| Language | TypeScript 5.6 (strict) |
-| Database | Firestore (firebase-admin) |
-| Auth | Google Sign-In → JWT (access + refresh) |
-| Linting | ESLint 9 (flat config) |
-| Deploy | Render |
+| Dato     | Valor                                   |
+| -------- | --------------------------------------- |
+| Runtime  | Node 22 + Express 4                     |
+| Language | TypeScript 5.6 (strict)                 |
+| Database | Firestore (firebase-admin)              |
+| Auth     | Google Sign-In → JWT (access + refresh) |
+| Linting  | ESLint 9 (flat config)                  |
+| Deploy   | Render                                  |
 
 **Entry point**: `src/index.ts` — mounts routers + errorHandler
 
@@ -129,15 +128,15 @@ src/
 
 ## Naming Conventions
 
-| Tipo | Convención | Ejemplo |
-|------|------------|---------|
-| Archivos de módulo | camelCase | `billingPeriod.model.ts` |
-| Clases/Entidades | PascalCase | `BillingPeriod` |
-| Interfaces | `I` prefix | `IBaseEntity` |
-| Variables locales | camelCase | `const billingPeriods` |
-| Constantes | UPPER_SNAKE | `CHILE_TZ` |
-| Router factory | `createXRouter` | `createBillingPeriodRouter` |
-| Params no usados | `_` prefix | `_req`, `_next` |
+| Tipo               | Convención      | Ejemplo                     |
+| ------------------ | --------------- | --------------------------- |
+| Archivos de módulo | camelCase       | `billingPeriod.model.ts`    |
+| Clases/Entidades   | PascalCase      | `BillingPeriod`             |
+| Interfaces         | `I` prefix      | `IBaseEntity`               |
+| Variables locales  | camelCase       | `const billingPeriods`      |
+| Constantes         | UPPER_SNAKE     | `CHILE_TZ`                  |
+| Router factory     | `createXRouter` | `createBillingPeriodRouter` |
+| Params no usados   | `_` prefix      | `_req`, `_next`             |
 
 ---
 
@@ -162,12 +161,12 @@ import { BillingPeriod } from "./billingPeriod.model";
 ## HTTP Response Codes
 
 | Operación | Éxito | Not Found | Client Error | Server Error |
-|-----------|-------|-----------|--------------|--------------|
-| GET list | 200 | — | 400 | 500 |
-| GET by ID | 200 | 404 | 400 | 500 |
-| POST | 201 | — | 400 | 500 |
-| PUT | 200 | 404 | 400 | 500 |
-| DELETE | 200 | 404 | — | 500 |
+| --------- | ----- | --------- | ------------ | ------------ |
+| GET list  | 200   | —         | 400          | 500          |
+| GET by ID | 200   | 404       | 400          | 500          |
+| POST      | 201   | —         | 400          | 500          |
+| PUT       | 200   | 404       | 400          | 500          |
+| DELETE    | 200   | 404       | —            | 500          |
 
 ---
 
@@ -184,13 +183,13 @@ npm run lint     # ESLint check
 
 ## Environment Variables
 
-| Variable | Propósito | Required |
-|----------|-----------|----------|
-| `SERVICE_ACCOUNT_KEY` | Firebase SA (base64) | Yes (prod) |
-| `FIREBASE_DB_URL` | Firestore URL | Yes |
-| `JWT_SECRET` | JWT signing | Yes |
-| `JWT_REFRESH_SECRET` | Refresh token signing | Yes |
-| `PORT` | Server port (default 3000) | No |
+| Variable              | Propósito                  | Required   |
+| --------------------- | -------------------------- | ---------- |
+| `SERVICE_ACCOUNT_KEY` | Firebase SA (base64)       | Yes (prod) |
+| `FIREBASE_DB_URL`     | Firestore URL              | Yes        |
+| `JWT_SECRET`          | JWT signing                | Yes        |
+| `JWT_REFRESH_SECRET`  | Refresh token signing      | Yes        |
+| `PORT`                | Server port (default 3000) | No         |
 
 ---
 
@@ -237,12 +236,40 @@ Existing issues to resolve progressively:
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/index.ts` | Express app, router mounting |
-| `src/config/firebase.ts` | Firebase init, exports `db` |
-| `src/shared/classes/firestore.repository.ts` | Generic Firestore CRUD |
-| `src/shared/classes/base.service.ts` | Generic service CRUD |
-| `src/shared/middlewares/auth.middleware.ts` | JWT authentication |
-| `src/shared/errors/custom.error.ts` | RepositoryError, AuthError |
-| `src/shared/utils/date.utils.ts` | Chile timezone utilities |
+| File                                         | Purpose                      |
+| -------------------------------------------- | ---------------------------- |
+| `src/index.ts`                               | Express app, router mounting |
+| `src/config/firebase.ts`                     | Firebase init, exports `db`  |
+| `src/shared/classes/firestore.repository.ts` | Generic Firestore CRUD       |
+| `src/shared/classes/base.service.ts`         | Generic service CRUD         |
+| `src/shared/middlewares/auth.middleware.ts`  | JWT authentication           |
+| `src/shared/errors/custom.error.ts`          | RepositoryError, AuthError   |
+| `src/shared/utils/date.utils.ts`             | Chile timezone utilities     |
+
+---
+
+## Git Workflow
+
+### ALWAYS
+
+1. **Crear rama** para cada desarrollo — NUNCA commitear directo a `main`
+2. **Branch naming**: `feat/<nombre>`, `fix/<nombre>`, `refactor/<nombre>`, `chore/<nombre>`
+3. **Crear PR** con `gh pr create` al terminar el desarrollo
+4. **Commits descriptivos** con prefijo: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`
+
+### NEVER
+
+1. **Push directo a `main`** — siempre via PR
+2. **`git push --force`** sin confirmación explícita del usuario
+3. **Mezclar scopes** en un PR — un PR = un tema
+
+### Flujo
+
+```bash
+git checkout -b feat/mi-feature     # 1. Crear rama
+# ... hacer cambios ...
+git add <archivos>                  # 2. Stage cambios relevantes
+git commit -m "feat: descripción"   # 3. Commit descriptivo
+git push -u origin feat/mi-feature  # 4. Push rama
+gh pr create --base main            # 5. Crear PR
+```
