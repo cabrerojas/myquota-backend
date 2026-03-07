@@ -245,3 +245,39 @@ Existing issues to resolve progressively:
 | `src/shared/middlewares/auth.middleware.ts`  | JWT authentication           |
 | `src/shared/errors/custom.error.ts`          | RepositoryError, AuthError   |
 | `src/shared/utils/date.utils.ts`             | Chile timezone utilities     |
+
+---
+
+## Git Workflow
+
+### ALWAYS
+
+1. **Crear rama** para cada desarrollo — NUNCA commitear directo a `main`
+2. **Branch naming**: `feat/<nombre>`, `fix/<nombre>`, `refactor/<nombre>`, `chore/<nombre>`
+3. **Crear PR** con `gh pr create` al terminar el desarrollo
+4. **Commits descriptivos** con prefijo: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`
+5. **Volver a `main`** después de crear el PR
+6. **Verificar rama actual** antes de empezar cualquier desarrollo
+
+### NEVER
+
+1. **Push directo a `main`** — siempre via PR
+2. **`git push --force`** sin confirmación explícita del usuario
+3. **Mezclar scopes** en un PR — un PR = un tema
+
+### Flujo
+
+```bash
+# Antes de empezar: verificar rama
+git branch --show-current
+# Si no estoy en main → evaluar si la rama es del mismo tema
+# Si es otro tema → git checkout main
+
+git checkout -b feat/mi-feature     # 1. Crear rama desde main
+# ... hacer cambios ...
+git add <archivos>                  # 2. Stage cambios relevantes
+git commit -m "feat: descripción"   # 3. Commit descriptivo
+git push -u origin feat/mi-feature  # 4. Push rama
+gh pr create --base main            # 5. Crear PR
+git checkout main                   # 6. Volver a main
+```
