@@ -1,4 +1,4 @@
-import { validateEnv } from "./config/env.validation";
+import { validateEnv, getEnv } from "./config/env.validation";
 validateEnv();
 
 import "./config/firebase";
@@ -18,6 +18,7 @@ import createStatsRouter from "./modules/stats/stats.routes";
 import createCategoryRouter from "./modules/category";
 
 const app = express();
+const env = getEnv();
 
 // Behind reverse proxy (Render, etc.) — needed for rate limiting & correct client IP
 app.set("trust proxy", 1);
@@ -25,8 +26,8 @@ app.set("trust proxy", 1);
 // --- Security middleware ---
 app.use(helmet());
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
+const allowedOrigins = env.ALLOWED_ORIGINS
+  ? env.ALLOWED_ORIGINS.split(",")
   : [];
 
 app.use(
@@ -73,7 +74,6 @@ app.use("/api/categories", createCategoryRouter());
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.warn(`Servidor ejecutándose en el puerto ${PORT}`);
+app.listen(env.PORT, () => {
+  console.warn(`Servidor ejecutándose en el puerto ${env.PORT}`);
 });

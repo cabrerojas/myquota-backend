@@ -3,6 +3,7 @@ import { getTokenFromFirestore } from "@config/gmailAuth";
 import * as cheerio from "cheerio";
 import { chunkArray } from "@/shared/utils/array.utils";
 import { parseFirebaseDate } from "@/shared/utils/date.utils";
+import { getEnv } from "@config/env.validation";
 
 import { TransactionRepository } from "./transaction.repository";
 import { Transaction } from "./transaction.model";
@@ -33,8 +34,9 @@ export class EmailImportService {
       );
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const env = getEnv();
+    const clientId = env.GOOGLE_CLIENT_ID;
+    const clientSecret = env.GOOGLE_CLIENT_SECRET;
     const auth: Auth.OAuth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,

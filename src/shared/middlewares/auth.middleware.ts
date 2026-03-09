@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { getEnv } from "@config/env.validation";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -25,7 +26,7 @@ export const authenticate = (
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    const decoded = jwt.verify(token, getEnv().JWT_SECRET) as {
       userId: string;
     };
 
@@ -40,13 +41,11 @@ export const authenticate = (
     console.error("Error en autenticación:", error);
     // Diferenciar expiración para que el cliente pueda intentar refresh
     if (error instanceof jwt.TokenExpiredError) {
-      res
-        .status(401)
-        .json({
-          message: "Token expirado",
-          code: "token_expired",
-          expiredAt: error.expiredAt,
-        });
+      res.status(401).json({
+        message: "Token expirado",
+        code: "token_expired",
+        expiredAt: error.expiredAt,
+      });
       return;
     }
 
