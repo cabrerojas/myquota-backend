@@ -5,7 +5,7 @@ import { chunkArray } from "@/shared/utils/array.utils";
 import { parseFirebaseDate } from "@/shared/utils/date.utils";
 import { getEnv } from "@config/env.validation";
 
-import { TransactionRepository } from "./transaction.repository";
+import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
 
@@ -24,7 +24,7 @@ export class EmailImportService {
    */
   async fetchBankEmails(
     userId: string,
-    repository: TransactionRepository,
+    creditCardRepository: CreditCardRepository,
   ): Promise<{ importedCount: number }> {
     const tokenData = await getTokenFromFirestore(userId);
 
@@ -90,7 +90,10 @@ export class EmailImportService {
     }
 
     const messageIds = res.data.messages.map((message) => message.id!);
-    const existingIds = await repository.getExistingTransactionIds(messageIds);
+    const existingIds = await this.getExistingTransactionIds(
+      creditCardRepository,
+      messageIds,
+    );
     const newMessageIds = messageIds.filter((id) => !existingIds.includes(id));
 
     if (newMessageIds.length === 0) {
@@ -170,12 +173,60 @@ export class EmailImportService {
 
       if (batchData.length > 0) {
         totalImported += batchData.length;
-        await repository.saveBatch(batchData);
+        await this.saveBatch(creditCardRepository, batchData);
         batchData = [];
       }
     }
 
     return { importedCount: totalImported };
+  }
+
+  /**
+   * Checks which transaction IDs already exist across all credit cards.
+   */
+  private async getExistingTransactionIds(
+    creditCardRepository: CreditCardRepository,
+    ids: string[],
+  ): Promise<string[]> {
+    const creditCards = await creditCardRepository.findAll();
+    const chunks = chunkArray(ids, 10);
+    const results = await Promise.all(
+      chunks.map(async (chunk) => {
+        const matched: string[] = [];
+        for (const creditCard of creditCards) {
+          const txCollection = creditCardRepository.getTransactionsCollection(
+            creditCard.id,
+          );
+          const snapshot = await txCollection
+            .where("id", "in", chunk)
+            .where("deletedAt", "==", null)
+            .get();
+          matched.push(...snapshot.docs.map((doc) => doc.id));
+        }
+        return matched;
+      }),
+    );
+    return results.flat();
+  }
+
+  /**
+   * Saves a batch of transactions, matching each to its credit card by cardLastDigits.
+   */
+  private async saveBatch(
+    creditCardRepository: CreditCardRepository,
+    transactions: Transaction[],
+  ): Promise<void> {
+    await Promise.all(
+      transactions.map(async (transaction) => {
+        const creditCard = await creditCardRepository.findOne({
+          cardLastDigits: transaction.cardLastDigits,
+        });
+        if (creditCard) {
+          transaction.creditCardId = creditCard.id;
+          await creditCardRepository.addTransaction(creditCard.id, transaction);
+        }
+      }),
+    );
   }
 
   /**

@@ -3,7 +3,8 @@ import { TransactionController } from "./transaction.controller";
 import { TransactionRepository } from "./transaction.repository";
 import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
-import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
+import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
+import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
 import { validate } from "@shared/middlewares/validate.middleware";
 import {
   createTransactionSchema,
@@ -38,9 +39,11 @@ const createTransactionRouter = (): Router => {
           userId,
           creditCardId,
         );
+        const creditCardRepository = new CreditCardRepository(userId);
         const service = new TransactionService(
           transactionRepository,
           billingPeriodRepository,
+          creditCardRepository,
         );
         const controller = new TransactionController(service);
 

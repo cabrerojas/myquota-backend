@@ -1,26 +1,18 @@
 import { FirestoreRepository } from "@/shared/classes/firestore.repository";
 import { Transaction } from "./transaction.model";
-import { chunkArray } from "@/shared/utils/array.utils";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 import { Quota } from "@/modules/quota/quota.model";
 
 export class TransactionRepository extends FirestoreRepository<Transaction> {
-  private creditCardRepository: CreditCardRepository;
-
   constructor(userId: string, creditCardId: string) {
     super(["users", userId, "creditCards", creditCardId], "transactions");
-
-    this.creditCardRepository = new CreditCardRepository(userId);
   }
 
-  // Obtener la referencia a la subcolección de cuotas dentro de la subcolección de transacciones de una tarjeta de crédito
+  // Obtener la referencia a la subcolección de cuotas dentro de una transacción
   getQuotasCollection(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
   ): FirebaseFirestore.CollectionReference<Quota> {
-    return this.creditCardRepository.repository
-      .doc(creditCardId)
-      .collection("transactions")
+    return this.repository
       .doc(transactionId)
       .collection("quotas") as FirebaseFirestore.CollectionReference<Quota>;
   }
@@ -76,65 +68,9 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
       transactionId,
     );
     const snapshot = await quotasCollection.get();
-    const batch = this.creditCardRepository.repository.firestore.batch();
+    const batch = this.repository.firestore.batch();
     snapshot.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
     return snapshot.size;
-  }
-
-  // Obtener IDs de transacciones existentes en Firestore y en CreditCard
-  async getExistingTransactionIds(ids: string[]): Promise<string[]> {
-    // Cargar tarjetas UNA sola vez fuera del loop de chunks
-    const creditCards = await this.creditCardRepository.findAll();
-    const chunks = chunkArray(ids, 10);
-    const results = await Promise.all(
-      chunks.map(async (chunk) => {
-        const creditCardTransactionIds: string[] = [];
-        for (const creditCard of creditCards) {
-          const transactionsCollection =
-            this.creditCardRepository.getTransactionsCollection(creditCard.id);
-          const transactionSnapshot = await transactionsCollection
-            .where("id", "in", chunk)
-            .where("deletedAt", "==", null)
-            .get();
-          creditCardTransactionIds.push(
-            ...transactionSnapshot.docs.map((doc) => doc.id),
-          );
-        }
-        return creditCardTransactionIds;
-      }),
-    );
-    return results.flat();
-  }
-
-  // Guardar un lote de transacciones y actualiza la tarjeta de crédito correspondiente
-  // Guardar un lote de transacciones y actualiza la tarjeta de crédito correspondiente
-  async saveBatch(transactions: Transaction[]): Promise<void> {
-    try {
-      await Promise.all(
-        transactions.map(async (transaction) => {
-          // Actualizar la tarjeta de crédito correspondiente
-          const creditCard = await this.creditCardRepository.findOne({
-            cardLastDigits: transaction.cardLastDigits,
-          });
-          if (creditCard) {
-            transaction.creditCardId = creditCard.id; // Establece el creditCardId
-            await this.creditCardRepository.addTransaction(
-              creditCard.id,
-              transaction,
-            );
-          }
-        }),
-      );
-      console.warn(
-        `Lote de transacciones guardado exitosamente en Firestore. Total de registros: ${transactions.length}`,
-      );
-    } catch (error) {
-      console.error(
-        "Error al guardar el lote de transacciones en Firestore:",
-        error,
-      );
-      throw error; // Propaga el error para manejo en niveles superiores
-    }
   }
 }

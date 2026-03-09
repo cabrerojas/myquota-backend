@@ -5,28 +5,35 @@ import { Transaction } from "./transaction.model";
 import { BaseService } from "@/shared/classes/base.service";
 import { Quota } from "@/modules/quota/quota.model";
 import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
+import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
 import { EmailImportService } from "./emailImport.service";
 import { ManualTransactionService } from "./manualTransaction.service";
 
 export class TransactionService extends BaseService<Transaction> {
   protected repository: TransactionRepository;
   private billingPeriodRepository: BillingPeriodRepository;
+  private creditCardRepository: CreditCardRepository;
   private emailImportService: EmailImportService;
   private manualTransactionService: ManualTransactionService;
 
   constructor(
     repository: TransactionRepository,
     billingPeriodRepository: BillingPeriodRepository,
+    creditCardRepository: CreditCardRepository,
   ) {
     super(repository);
     this.repository = repository;
     this.billingPeriodRepository = billingPeriodRepository;
+    this.creditCardRepository = creditCardRepository;
     this.emailImportService = new EmailImportService();
     this.manualTransactionService = new ManualTransactionService(repository);
   }
 
   async fetchBankEmails(userId: string): Promise<{ importedCount: number }> {
-    return this.emailImportService.fetchBankEmails(userId, this.repository);
+    return this.emailImportService.fetchBankEmails(
+      userId,
+      this.creditCardRepository,
+    );
   }
 
   /**
