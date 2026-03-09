@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { CategoryService } from "./category.service";
+import { MerchantPatternService } from "./merchant/merchant.service";
 import { CacheService, CacheKeys } from "@/shared/services/cache.service";
 
 /** Invalidate all category-related cache entries for a user */
@@ -184,10 +185,7 @@ export class CategoryController {
         res.status(400).json({ message: "categoryId es requerido" });
         return;
       }
-      const merchantService =
-        new (require("./merchant/merchant.service").MerchantPatternService)(
-          categoryId,
-        );
+      const merchantService = new MerchantPatternService(categoryId);
       const patterns = await merchantService.getAllPatterns();
       res.status(200).json(patterns);
     } catch (error) {
