@@ -61,6 +61,13 @@ const createStatsRouter = (): Router => {
     },
   );
 
+  router.get(
+    "/creditCards/:creditCardId/stats/monthly-quota-sum",
+    (req: Request, res: Response) => {
+      return res.locals.statsController.getMonthlyQuotaSum(req, res);
+    },
+  );
+
   return router;
 };
 

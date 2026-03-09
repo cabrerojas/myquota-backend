@@ -218,7 +218,7 @@ Before delivering code:
 
 Existing issues to resolve progressively:
 
-1. ~~`TransactionService` too large (~740 lines)~~ — EmailImportService extracted (466 lines remaining, consider further extraction of ManualTransaction logic)
+1. ~~`TransactionService` too large (~740 lines)~~ — EmailImportService, ManualTransactionService extracted, getMonthlyQuotaSum moved to StatsService (~280 lines remaining)
 2. Repository boundary violations — repos accessing other collections
 3. ~~`stats` module incomplete~~ — empty repository deleted (PR #9)
 4. ~~`UserService` constructor bug~~ — fixed (PR #8)

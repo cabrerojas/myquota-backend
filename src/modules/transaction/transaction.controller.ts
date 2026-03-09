@@ -489,23 +489,4 @@ export class TransactionController {
       });
     }
   };
-
-  /**
-   * Controlador para obtener la sumatoria de las cuotas por mes.
-   */
-  getMonthlyQuotaSum = async (req: Request, res: Response): Promise<void> => {
-    const { creditCardId } = req.params;
-
-    try {
-      const monthlyQuotaSum =
-        await this.service.getMonthlyQuotaSum(creditCardId);
-      res.status(200).json(monthlyQuotaSum);
-    } catch (error) {
-      console.error("Error al obtener la sumatoria de cuotas por mes:", error);
-      res.status(500).json({
-        message: "Error al obtener la sumatoria de cuotas por mes",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  };
 }

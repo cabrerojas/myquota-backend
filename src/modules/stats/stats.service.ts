@@ -42,6 +42,93 @@ export class StatsService {
     private billingPeriodRepository: BillingPeriodRepository,
   ) {}
 
+  /**
+   * Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
+   * Costo L3: 1 (billingPeriods) + 1 (transactions) + N_transactions (getQuotas) reads.
+   * Resultado cacheado en L1 memoria con TTL MEDIUM (2 min).
+   */
+  async getMonthlyQuotaSum(
+    creditCardId: string,
+  ): Promise<{ period: string; currency: string; totalAmount: number }[]> {
+    const cacheKey = CacheKeys.monthlyQuotaSum(creditCardId);
+    const cached =
+      CacheService.get<
+        { period: string; currency: string; totalAmount: number }[]
+      >(cacheKey);
+    if (cached !== null) return cached;
+
+    try {
+      const [billingPeriods, transactions] = await Promise.all([
+        this.billingPeriodRepository.findAll(),
+        this.transactionRepository.findAll(),
+      ]);
+
+      if (!billingPeriods.length || !transactions.length) return [];
+
+      const formattedBillingPeriods = billingPeriods.map((period) => ({
+        periodKey: `${convertUtcToChileTime(
+          period.startDate,
+          "yyyy-MM-dd",
+        )} - ${convertUtcToChileTime(period.endDate, "yyyy-MM-dd")}`,
+        startDate: new Date(
+          convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss"),
+        ),
+        endDate: new Date(
+          convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss"),
+        ),
+      }));
+
+      const allQuotas = (
+        await Promise.all(
+          transactions.map((tx) =>
+            this.transactionRepository.getQuotas(creditCardId, tx.id),
+          ),
+        )
+      ).flat();
+
+      const periodSumMap: { [key: string]: { [currency: string]: number } } =
+        {};
+
+      for (const billingPeriod of formattedBillingPeriods) {
+        periodSumMap[billingPeriod.periodKey] = {};
+        const quotasInPeriod = allQuotas.filter((quota) => {
+          if (!quota.dueDate) return false;
+          const quotaDate = new Date(
+            convertUtcToChileTime(quota.dueDate, "yyyy-MM-dd HH:mm:ss"),
+          );
+          return (
+            quotaDate >= billingPeriod.startDate &&
+            quotaDate <= billingPeriod.endDate
+          );
+        });
+        for (const quota of quotasInPeriod) {
+          periodSumMap[billingPeriod.periodKey][quota.currency] =
+            (periodSumMap[billingPeriod.periodKey][quota.currency] ?? 0) +
+            quota.amount;
+        }
+      }
+
+      const result = Object.entries(periodSumMap).flatMap(
+        ([period, currencyMap]) =>
+          Object.entries(currencyMap).map(([currency, totalAmount]) => ({
+            period,
+            currency,
+            totalAmount,
+          })),
+      );
+
+      CacheService.set(cacheKey, result, CacheTTL.MEDIUM);
+
+      return result;
+    } catch (error) {
+      console.error(
+        "Error al obtener la sumatoria de las cuotas por período de facturación:",
+        error,
+      );
+      throw error;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Firestore materialized view document references
   // Path: users/{userId}/summaries/debtSummary
