@@ -42,4 +42,20 @@ export class AuthController {
       res.status(401).json({ message: "Refresh token inválido o expirado" });
     }
   };
+
+  logout = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        res.status(400).json({ message: "refreshToken no proporcionado" });
+        return;
+      }
+
+      await this.service.logout(refreshToken);
+      res.status(200).json({ message: "Sesión cerrada correctamente" });
+    } catch (error) {
+      console.error("Error en logout:", error);
+      res.status(500).json({ message: "Error al cerrar sesión" });
+    }
+  };
 }

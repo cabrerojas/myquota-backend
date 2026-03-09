@@ -4,9 +4,13 @@ import { UserRepository } from "@modules/user/user.repository";
 import { User } from "@modules/user/user.model";
 import { AuthError } from "@shared/errors/custom.error";
 import { saveTokenToFirestore } from "@/config/gmailAuth";
+import { RevokedTokenRepository } from "./revokedToken.repository";
 
 export class AuthService {
-  constructor(private readonly userRepository: UserRepository) {}
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly revokedTokenRepository: RevokedTokenRepository,
+  ) {}
 
   async loginWithGoogle(
     idToken: string,
@@ -110,9 +114,16 @@ export class AuthService {
       const decoded = jwt.verify(refreshToken, refreshSecret) as {
         userId: string;
         type?: string;
+        exp?: number;
       };
       if (!decoded || decoded.type !== "refresh" || !decoded.userId) {
         throw new Error("Refresh token inválido");
+      }
+
+      // Verificar si el token fue revocado
+      const isRevoked = await this.revokedTokenRepository.isRevoked(refreshToken);
+      if (isRevoked) {
+        throw new Error("Refresh token revocado");
       }
 
       const user = await this.userRepository.findById(decoded.userId);
@@ -127,7 +138,6 @@ export class AuthService {
         } as jwt.SignOptions,
       );
 
-      // Opcional: rotar refresh token (aquí devolvemos uno nuevo)
       const newRefreshToken = jwt.sign(
         { userId: user.id, type: "refresh" },
         refreshSecret,
@@ -136,10 +146,36 @@ export class AuthService {
         } as jwt.SignOptions,
       );
 
+      // Revocar el refresh token anterior
+      const expiresAt = decoded.exp
+        ? new Date(decoded.exp * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      await this.revokedTokenRepository.revoke(refreshToken, expiresAt);
+
       return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
       console.error("Error refreshing token:", error);
       throw error;
+    }
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    try {
+      const refreshSecret =
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+      const decoded = jwt.verify(refreshToken, refreshSecret) as {
+        exp?: number;
+      };
+      const expiresAt = decoded.exp
+        ? new Date(decoded.exp * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      await this.revokedTokenRepository.revoke(refreshToken, expiresAt);
+    } catch {
+      // Si el token ya expiró o es inválido, no importa — igualmente revocamos el hash
+      await this.revokedTokenRepository.revoke(
+        refreshToken,
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      );
     }
   }
 }
