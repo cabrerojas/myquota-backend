@@ -218,19 +218,19 @@ Before delivering code:
 
 Existing issues to resolve progressively:
 
-1. `TransactionService` too large (~740 lines) — extract to specialized services
+1. ~~`TransactionService` too large (~740 lines)~~ — EmailImportService extracted (466 lines remaining, consider further extraction of ManualTransaction logic)
 2. Repository boundary violations — repos accessing other collections
-3. `stats` module incomplete — empty repository, unused interfaces
-4. `UserService` constructor bug — ignores injected repository
-5. `MerchantPattern` doesn't follow pattern — no IBaseEntity
-6. snake_case in `Quota` model — `due_date`, `payment_date`
-7. Excessive console.log with emojis
-8. `errorHandler` debug leftovers
+3. ~~`stats` module incomplete~~ — empty repository deleted (PR #9)
+4. ~~`UserService` constructor bug~~ — fixed (PR #8)
+5. ~~`MerchantPattern` doesn't follow pattern~~ — now implements IBaseEntity (PR #9)
+6. ~~snake_case in `Quota` model~~ — migrated to camelCase (PR #10)
+7. ~~Excessive console.log with emojis~~ — cleaned up (PR #8)
+8. ~~`errorHandler` debug leftovers~~ — hardened (PR #8)
 9. `@Collection` decorator unused
-10. No `req.body` validation — future: add Zod
+10. ~~No `req.body` validation~~ — Zod schemas added (PR #5)
 11. No tests
 12. Environment variables without validation
-13. Currency inconsistency — "Dolar" vs "CLP"
+13. ~~Currency inconsistency — "Dolar" vs "CLP"~~ — normalized to USD (PR #11)
 
 ---
 
