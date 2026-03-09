@@ -2,7 +2,7 @@ import { Router } from "express";
 import { UserController } from "./user.controller";
 import { UserRepository } from "./user.repository";
 import { UserService } from "./user.service";
-import { authenticate } from "@/shared/middlewares/auth.middleware"; // 📌 Middleware para validar JWT
+import { authenticate } from "@/shared/middlewares/auth.middleware";
 
 const createUserRouter = (): Router => {
   const router = Router();
@@ -10,25 +10,16 @@ const createUserRouter = (): Router => {
   const service = new UserService(repository);
   const controller = new UserController(service);
 
-  // 📌 Rutas protegidas (requieren JWT válido)
-  router.get("/users", authenticate, (req, res) =>
-    controller.getUsers(req, res)
+  // El usuario solo puede acceder a su propio perfil (userId del JWT)
+  router.get("/users/me", authenticate, (req, res) =>
+    controller.getMyProfile(req, res),
   );
-  router.get("/users/:userId", authenticate, (req, res) =>
-    controller.getUserById(req, res)
+  router.put("/users/me", authenticate, (req, res) =>
+    controller.updateMyProfile(req, res),
   );
-  router.get("/users/email/:email", authenticate, (req, res) =>
-    controller.getUserByEmail(req, res)
+  router.delete("/users/me", authenticate, (req, res) =>
+    controller.deleteMyProfile(req, res),
   );
-  router.put("/users/:userId", authenticate, (req, res) =>
-    controller.updateUser(req, res)
-  );
-  router.delete("/users/:userId", authenticate, (req, res) =>
-    controller.deleteUser(req, res)
-  );
-
-  // 📌 Registro de usuario (no requiere autenticación)
-  router.post("/user", (req, res) => controller.createUser(req, res));
 
   return router;
 };
