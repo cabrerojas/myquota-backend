@@ -3,6 +3,8 @@ import { UserController } from "./user.controller";
 import { UserRepository } from "./user.repository";
 import { UserService } from "./user.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import { updateUserSchema } from "./user.schemas";
 
 const createUserRouter = (): Router => {
   const router = Router();
@@ -14,8 +16,11 @@ const createUserRouter = (): Router => {
   router.get("/users/me", authenticate, (req, res) =>
     controller.getMyProfile(req, res),
   );
-  router.put("/users/me", authenticate, (req, res) =>
-    controller.updateMyProfile(req, res),
+  router.put(
+    "/users/me",
+    authenticate,
+    validate(updateUserSchema),
+    (req, res) => controller.updateMyProfile(req, res),
   );
   router.delete("/users/me", authenticate, (req, res) =>
     controller.deleteMyProfile(req, res),

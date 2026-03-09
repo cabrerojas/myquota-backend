@@ -4,6 +4,13 @@ import { TransactionRepository } from "./transaction.repository";
 import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
+import { validate } from "@shared/middlewares/validate.middleware";
+import {
+  createTransactionSchema,
+  updateTransactionSchema,
+  createManualTransactionSchema,
+  updateManualTransactionSchema,
+} from "./transaction.schemas";
 
 const createTransactionRouter = (): Router => {
   const router = Router();
@@ -57,6 +64,7 @@ const createTransactionRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/transactions",
+    validate(createTransactionSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.addTransaction(req, res);
     },
@@ -64,6 +72,7 @@ const createTransactionRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/transactions/manual",
+    validate(createManualTransactionSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.createManualTransaction(req, res);
     },
@@ -78,6 +87,7 @@ const createTransactionRouter = (): Router => {
 
   router.put(
     "/creditCards/:creditCardId/transactions/manual/:transactionId",
+    validate(updateManualTransactionSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.updateManualTransaction(req, res);
     },
@@ -106,6 +116,7 @@ const createTransactionRouter = (): Router => {
 
   router.put(
     "/creditCards/:creditCardId/transactions/:transactionId",
+    validate(updateTransactionSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.updateTransaction(req, res);
     },
