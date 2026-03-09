@@ -7,5 +7,5 @@ export function errorHandler(
   _next: NextFunction,
 ) {
   console.error(err.stack);
-  res.status(500).send({ message: "Ha ocurrido un error", error: err.message });
+  res.status(500).send({ message: "Ha ocurrido un error interno" });
 }

@@ -60,9 +60,6 @@ export class QuotaService extends BaseService<Quota> {
       creditCardId,
       transactionId,
     );
-    console.log(
-      `🗑️ ${deleted} cuotas eliminadas para transacción ${transactionId}`,
-    );
 
     // Calcular monto por cuota
     const cuotaAmount = Math.round(transaction.amount / numberOfQuotas);

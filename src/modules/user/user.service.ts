@@ -3,11 +3,8 @@ import { User } from "./user.model";
 import { BaseService } from "@/shared/classes/base.service";
 
 export class UserService extends BaseService<User> {
-  protected repository: UserRepository;
-
-  constructor(repository: UserRepository) {
+  constructor(protected repository: UserRepository) {
     super(repository);
-    this.repository = repository;
   }
 
   // Crear un usuario asegurando que el email sea único

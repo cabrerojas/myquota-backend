@@ -25,16 +25,10 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
   // Obtener todas las transacciones de la subcolección
   async getTransactions(creditCardId: string): Promise<Transaction[]> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
-    console.log(
-      `Obteniendo transacciones para la tarjeta de crédito con ID: ${creditCardId}`,
-    );
-
-    console.log(`transactionsCollection: ${transactionsCollection}`);
 
     const snapshot = await transactionsCollection
       .where("deletedAt", "==", null)
       .get();
-    console.log(`Número de transacciones encontradas: ${snapshot.size}`);
 
     return snapshot.docs.map((doc) => doc.data() as Transaction);
   }

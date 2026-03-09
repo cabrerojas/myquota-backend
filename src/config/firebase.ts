@@ -8,7 +8,7 @@ dotenv.config();
 
 const serviceAccountJson = Buffer.from(
   process.env.SERVICE_ACCOUNT_KEY!,
-  "base64"
+  "base64",
 ).toString("utf8");
 const serviceAccount = JSON.parse(serviceAccountJson);
 
@@ -19,6 +19,5 @@ admin.initializeApp({
 
 // Inicializar Firestore y Fireorm
 const db = admin.firestore();
-console.log("Fireorm initialized with Firestore instance");
 
 export { db };
