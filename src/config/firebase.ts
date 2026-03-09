@@ -14,7 +14,6 @@ admin.initializeApp({
   databaseURL: env.FIREBASE_DB_URL,
 });
 
-// Inicializar Firestore y Fireorm
 const db = admin.firestore();
 
 export { db };

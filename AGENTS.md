@@ -226,7 +226,7 @@ Existing issues to resolve progressively:
 6. ~~snake_case in `Quota` model~~ — migrated to camelCase (PR #10)
 7. ~~Excessive console.log with emojis~~ — cleaned up (PR #8)
 8. ~~`errorHandler` debug leftovers~~ — hardened (PR #8)
-9. `@Collection` decorator unused
+9. ~~`@Collection` decorator unused~~ — fireorm remnants cleaned up (PR #15)
 10. ~~No `req.body` validation~~ — Zod schemas added (PR #5)
 11. No tests
 12. ~~Environment variables without validation~~ — Zod schema in env.validation.ts, typed getEnv() (PR #14)
