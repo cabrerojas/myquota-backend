@@ -2,6 +2,14 @@ import { Router, Request, Response, NextFunction } from "express";
 import { CategoryController } from "./category.controller";
 import { CategoryService } from "./category.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  matchMerchantSchema,
+  createCategoryWithMerchantSchema,
+  addMerchantToCategorySchema,
+} from "./category.schemas";
 
 const createCategoryRouter = (): Router => {
   const router = Router();
@@ -24,26 +32,42 @@ const createCategoryRouter = (): Router => {
   });
 
   // Endpoint para crear categoría global o personal y asociar comercio
-  router.post("/with-merchant", (req: Request, res: Response) => {
-    return res.locals.categoryController.createCategoryWithMerchant(req, res);
-  });
+  router.post(
+    "/with-merchant",
+    validate(createCategoryWithMerchantSchema),
+    (req: Request, res: Response) => {
+      return res.locals.categoryController.createCategoryWithMerchant(req, res);
+    },
+  );
 
-  router.post("/", (req: Request, res: Response) => {
-    return res.locals.categoryController.addCategory(req, res);
-  });
+  router.post(
+    "/",
+    validate(createCategorySchema),
+    (req: Request, res: Response) => {
+      return res.locals.categoryController.addCategory(req, res);
+    },
+  );
 
-  router.put("/:id", (req: Request, res: Response) => {
-    return res.locals.categoryController.updateCategory(req, res);
-  });
+  router.put(
+    "/:id",
+    validate(updateCategorySchema),
+    (req: Request, res: Response) => {
+      return res.locals.categoryController.updateCategory(req, res);
+    },
+  );
 
   router.delete("/:id", (req: Request, res: Response) => {
     return res.locals.categoryController.deleteCategory(req, res);
   });
 
   // Endpoint para sugerir categoría por comercio
-  router.post("/match-merchant", (req: Request, res: Response) => {
-    return res.locals.categoryController.matchMerchant(req, res);
-  });
+  router.post(
+    "/match-merchant",
+    validate(matchMerchantSchema),
+    (req: Request, res: Response) => {
+      return res.locals.categoryController.matchMerchant(req, res);
+    },
+  );
 
   // Endpoint para obtener categorías usadas previamente para un merchant
   router.get("/merchant-history", (req: Request, res: Response) => {
@@ -56,9 +80,13 @@ const createCategoryRouter = (): Router => {
   });
 
   // Endpoint para asociar comercio a una categoría global existente
-  router.post("/:categoryId/add-merchant", (req: Request, res: Response) => {
-    return res.locals.categoryController.addMerchantToCategory(req, res);
-  });
+  router.post(
+    "/:categoryId/add-merchant",
+    validate(addMerchantToCategorySchema),
+    (req: Request, res: Response) => {
+      return res.locals.categoryController.addMerchantToCategory(req, res);
+    },
+  );
 
   // Endpoint para listar patrones de comercios de una categoría global
   router.get("/:categoryId/merchants", (req: Request, res: Response) => {

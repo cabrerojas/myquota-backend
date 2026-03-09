@@ -3,6 +3,11 @@ import { CreditCardController } from "./creditCard.controller";
 import { CreditCardRepository } from "./creditCard.repository";
 import { CreditCardService } from "./creditCard.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import {
+  createCreditCardSchema,
+  updateCreditCardSchema,
+} from "./creditCard.schemas";
 
 const createCreditCardRouter = (): Router => {
   const router = Router();
@@ -37,9 +42,13 @@ const createCreditCardRouter = (): Router => {
     return res.locals.creditCardController.getCreditCards(req, res);
   });
 
-  router.post("/creditCards", (req: Request, res: Response) => {
-    return res.locals.creditCardController.addCreditCard(req, res);
-  });
+  router.post(
+    "/creditCards",
+    validate(createCreditCardSchema),
+    (req: Request, res: Response) => {
+      return res.locals.creditCardController.addCreditCard(req, res);
+    },
+  );
 
   router.get(
     "/creditCards/uncategorized-count",
@@ -52,9 +61,13 @@ const createCreditCardRouter = (): Router => {
     return res.locals.creditCardController.getCreditCard(req, res);
   });
 
-  router.put("/creditCards/:creditCardId", (req: Request, res: Response) => {
-    return res.locals.creditCardController.updateCreditCard(req, res);
-  });
+  router.put(
+    "/creditCards/:creditCardId",
+    validate(updateCreditCardSchema),
+    (req: Request, res: Response) => {
+      return res.locals.creditCardController.updateCreditCard(req, res);
+    },
+  );
 
   router.delete("/creditCards/:creditCardId", (req: Request, res: Response) => {
     return res.locals.creditCardController.deleteCreditCard(req, res);

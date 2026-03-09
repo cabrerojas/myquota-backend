@@ -5,6 +5,12 @@ import { QuotaService } from "./quota.service";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import {
+  createQuotaSchema,
+  updateQuotaSchema,
+  splitQuotasSchema,
+} from "./quota.schemas";
 
 const createQuotaRouter = (): Router => {
   const router = Router();
@@ -60,6 +66,7 @@ const createQuotaRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas",
+    validate(createQuotaSchema),
     (req: Request, res: Response) => {
       return res.locals.quotaController.addQuota(req, res);
     },
@@ -74,6 +81,7 @@ const createQuotaRouter = (): Router => {
 
   router.put(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas/:quotaId",
+    validate(updateQuotaSchema),
     (req: Request, res: Response) => {
       return res.locals.quotaController.updateQuota(req, res);
     },
@@ -88,6 +96,7 @@ const createQuotaRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas/split",
+    validate(splitQuotasSchema),
     (req: Request, res: Response) => {
       return res.locals.quotaController.splitQuotas(req, res);
     },
