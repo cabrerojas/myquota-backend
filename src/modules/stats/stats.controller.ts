@@ -23,6 +23,23 @@ export class StatsController {
     }
   };
 
+  // Obtener sumatoria de cuotas por período de facturación
+  getMonthlyQuotaSum = async (req: Request, res: Response): Promise<void> => {
+    const { creditCardId } = req.params;
+
+    try {
+      const monthlyQuotaSum =
+        await this.service.getMonthlyQuotaSum(creditCardId);
+      res.status(200).json(monthlyQuotaSum);
+    } catch (error) {
+      console.error("Error al obtener la sumatoria de cuotas por mes:", error);
+      res.status(500).json({
+        message: "Error al obtener la sumatoria de cuotas por mes",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
   // Obtener resumen de deuda global (todas las tarjetas)
   static getDebtSummary = async (
     req: Request,

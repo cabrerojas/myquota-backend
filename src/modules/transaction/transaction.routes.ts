@@ -101,13 +101,6 @@ const createTransactionRouter = (): Router => {
   );
 
   router.get(
-    "/creditCards/:creditCardId/transactions/monthly-sum",
-    (req: Request, res: Response) => {
-      return res.locals.transactionController.getMonthlyQuotaSum(req, res);
-    },
-  );
-
-  router.get(
     "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransaction(req, res);
