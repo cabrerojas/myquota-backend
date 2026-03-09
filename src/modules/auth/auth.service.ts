@@ -5,6 +5,7 @@ import { User } from "@modules/user/user.model";
 import { AuthError } from "@shared/errors/custom.error";
 import { saveTokenToFirestore } from "@/config/gmailAuth";
 import { RevokedTokenRepository } from "./revokedToken.repository";
+import { getEnv } from "@config/env.validation";
 
 export class AuthService {
   constructor(
@@ -16,13 +17,8 @@ export class AuthService {
     idToken: string,
     serverAuthCode?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      throw new AuthError(
-        "GOOGLE_CLIENT_ID no configurado en variables de entorno",
-        500,
-      );
-    }
+    const env = getEnv();
+    const clientId = env.GOOGLE_CLIENT_ID;
 
     // Verificar el `idToken` con Google
     const client = new OAuth2Client(clientId);
@@ -80,7 +76,7 @@ export class AuthService {
       try {
         const oAuth2Client = new OAuth2Client(
           clientId,
-          process.env.GOOGLE_CLIENT_SECRET,
+          env.GOOGLE_CLIENT_SECRET,
           "", // redirect_uri vacío para mobile
         );
         const { tokens } = await oAuth2Client.getToken(serverAuthCode);
@@ -93,15 +89,14 @@ export class AuthService {
     }
 
     // Generar access token (corto) y refresh token (largo)
-    const jwtSecret = process.env.JWT_SECRET as jwt.Secret;
+    const jwtSecret = env.JWT_SECRET as jwt.Secret;
     const accessToken = jwt.sign({ userId, email, type: "access" }, jwtSecret, {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+      expiresIn: env.ACCESS_TOKEN_EXPIRES_IN,
     } as jwt.SignOptions);
 
-    const refreshSecret =
-      (process.env.JWT_REFRESH_SECRET as jwt.Secret) || jwtSecret;
+    const refreshSecret = env.JWT_REFRESH_SECRET as jwt.Secret;
     const refreshToken = jwt.sign({ userId, type: "refresh" }, refreshSecret, {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
+      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
     } as jwt.SignOptions);
 
     return { accessToken, refreshToken };
@@ -109,8 +104,8 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string) {
     try {
-      const refreshSecret =
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+      const env = getEnv();
+      const refreshSecret = env.JWT_REFRESH_SECRET;
       const decoded = jwt.verify(refreshToken, refreshSecret) as {
         userId: string;
         type?: string;
@@ -121,7 +116,8 @@ export class AuthService {
       }
 
       // Verificar si el token fue revocado
-      const isRevoked = await this.revokedTokenRepository.isRevoked(refreshToken);
+      const isRevoked =
+        await this.revokedTokenRepository.isRevoked(refreshToken);
       if (isRevoked) {
         throw new Error("Refresh token revocado");
       }
@@ -129,12 +125,12 @@ export class AuthService {
       const user = await this.userRepository.findById(decoded.userId);
       if (!user) throw new Error("Usuario no encontrado");
 
-      const jwtSecret = process.env.JWT_SECRET as jwt.Secret;
+      const jwtSecret = env.JWT_SECRET as jwt.Secret;
       const accessToken = jwt.sign(
         { userId: user.id, email: user.email, type: "access" },
         jwtSecret,
         {
-          expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+          expiresIn: env.ACCESS_TOKEN_EXPIRES_IN,
         } as jwt.SignOptions,
       );
 
@@ -142,7 +138,7 @@ export class AuthService {
         { userId: user.id, type: "refresh" },
         refreshSecret,
         {
-          expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d",
+          expiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
         } as jwt.SignOptions,
       );
 
@@ -161,8 +157,7 @@ export class AuthService {
 
   async logout(refreshToken: string): Promise<void> {
     try {
-      const refreshSecret =
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+      const refreshSecret = getEnv().JWT_REFRESH_SECRET;
       const decoded = jwt.verify(refreshToken, refreshSecret) as {
         exp?: number;
       };

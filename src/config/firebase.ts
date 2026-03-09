@@ -1,20 +1,17 @@
 import admin from "firebase-admin";
-import dotenv from "dotenv";
+import { getEnv } from "@config/env.validation";
 
-dotenv.config();
-
-// Configuración de Firebase
-//const serviceAccount = require(path.join(__dirname, 'serviceAccountKey.json'));
+const env = getEnv();
 
 const serviceAccountJson = Buffer.from(
-  process.env.SERVICE_ACCOUNT_KEY!,
+  env.SERVICE_ACCOUNT_KEY,
   "base64",
 ).toString("utf8");
 const serviceAccount = JSON.parse(serviceAccountJson);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DB_URL,
+  databaseURL: env.FIREBASE_DB_URL,
 });
 
 // Inicializar Firestore y Fireorm

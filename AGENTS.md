@@ -229,7 +229,7 @@ Existing issues to resolve progressively:
 9. `@Collection` decorator unused
 10. ~~No `req.body` validation~~ — Zod schemas added (PR #5)
 11. No tests
-12. Environment variables without validation
+12. ~~Environment variables without validation~~ — Zod schema in env.validation.ts, typed getEnv() (PR #14)
 13. ~~Currency inconsistency — "Dolar" vs "CLP"~~ — normalized to USD (PR #11)
 
 ---

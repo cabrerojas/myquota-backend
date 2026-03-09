@@ -1,6 +1,7 @@
 import { google, Auth } from "googleapis";
 import readline from "readline";
 import { db } from "@/config/firebase";
+import { getEnv } from "@config/env.validation";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
@@ -9,16 +10,16 @@ const SCOPES = [
 
 // Decodificar credenciales desde variable de entorno
 function getGoogleCredentials(): Auth.OAuth2Client {
-  if (!process.env.CREDENTIALS_JSON) {
+  const env = getEnv();
+  if (!env.CREDENTIALS_JSON) {
     throw new Error(
       "CREDENTIALS_JSON no está definido en las variables de entorno.",
     );
   }
 
-  const credentialsJson = Buffer.from(
-    process.env.CREDENTIALS_JSON,
-    "base64",
-  ).toString("utf8");
+  const credentialsJson = Buffer.from(env.CREDENTIALS_JSON, "base64").toString(
+    "utf8",
+  );
   const credentials = JSON.parse(credentialsJson);
 
   const { client_secret, client_id } = credentials.installed;
