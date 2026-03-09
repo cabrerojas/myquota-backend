@@ -212,25 +212,31 @@ Before delivering code:
 - [ ] Entity fields are camelCase
 - [ ] No unnecessary `console.log` (only `console.error` in catches)
 
+# Skills & Docs QA
+
+- [ ] Ejecutar `skill-audit` antes de entregar cambios en skills o AGENTS.md
+- [ ] Usar `skill-creator` al crear skills nuevos
+- [ ] Ejecutar `./skills/skill-sync/assets/sync.sh` antes de PR si cambiaste skills o AGENTS.md
+
 ---
 
 ## Technical Debt (DO NOT ADD MORE)
 
 Existing issues to resolve progressively:
 
-1. `TransactionService` too large (~740 lines) — extract to specialized services
-2. Repository boundary violations — repos accessing other collections
-3. `stats` module incomplete — empty repository, unused interfaces
-4. `UserService` constructor bug — ignores injected repository
-5. `MerchantPattern` doesn't follow pattern — no IBaseEntity
-6. snake_case in `Quota` model — `due_date`, `payment_date`
-7. Excessive console.log with emojis
-8. `errorHandler` debug leftovers
-9. `@Collection` decorator unused
-10. No `req.body` validation — future: add Zod
+1. ~~`TransactionService` too large (~740 lines)~~ — EmailImportService, ManualTransactionService extracted, getMonthlyQuotaSum moved to StatsService (~280 lines remaining)
+2. ~~Repository boundary violations~~ — TransactionRepository no longer depends on CreditCardRepository; cross-card logic moved to EmailImportService (PR #16)
+3. ~~`stats` module incomplete~~ — empty repository deleted (PR #9)
+4. ~~`UserService` constructor bug~~ — fixed (PR #8)
+5. ~~`MerchantPattern` doesn't follow pattern~~ — now implements IBaseEntity (PR #9)
+6. ~~snake_case in `Quota` model~~ — migrated to camelCase (PR #10)
+7. ~~Excessive console.log with emojis~~ — cleaned up (PR #8)
+8. ~~`errorHandler` debug leftovers~~ — hardened (PR #8)
+9. ~~`@Collection` decorator unused~~ — fireorm remnants cleaned up (PR #15)
+10. ~~No `req.body` validation~~ — Zod schemas added (PR #5)
 11. No tests
-12. Environment variables without validation
-13. Currency inconsistency — "Dolar" vs "CLP"
+12. ~~Environment variables without validation~~ — Zod schema in env.validation.ts, typed getEnv() (PR #14)
+13. ~~Currency inconsistency — "Dolar" vs "CLP"~~ — normalized to USD (PR #11)
 
 ---
 
