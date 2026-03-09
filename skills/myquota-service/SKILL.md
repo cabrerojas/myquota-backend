@@ -193,6 +193,47 @@ export class StatsService {
 
 ---
 
+## Servicios Especializados (Sub-servicios)
+
+Cuando un servicio crece demasiado, extraer concerns específicos a sub-servicios dentro del mismo módulo:
+
+```
+src/modules/transaction/
+├── transaction.service.ts           # Servicio principal (orquesta)
+├── emailImport.service.ts           # Gmail + parsing de emails bancarios
+└── manualTransaction.service.ts     # CRUD de transacciones manuales
+```
+
+### Patrón de Sub-servicio
+
+```typescript
+// src/modules/transaction/emailImport.service.ts
+
+/**
+ * Handles Gmail integration and bank-email parsing.
+ * Extracted from TransactionService to isolate external-API concerns.
+ * Stateless: all dependencies are passed explicitly.
+ */
+export class EmailImportService {
+  async fetchBankEmails(
+    userId: string,
+    creditCardRepository: CreditCardRepository,
+  ): Promise<{ importedCount: number }> {
+    // Lógica específica de importación por email
+  }
+}
+```
+
+### Reglas de Sub-servicios
+
+- **NO extienden BaseService** (no tienen entidad CRUD propia)
+- Reciben dependencias explícitamente (por parámetro o constructor)
+- Son instanciados desde el servicio principal
+- Un archivo separado dentro del mismo módulo
+- Documentar con JSDoc qué concern manejan
+
+---
+
 ## Anti-patterns
 
 ```typescript
@@ -224,3 +265,5 @@ async getAllFormatted(): Promise<string[]> {
 - [ ] Validaciones de entrada en el servicio
 - [ ] Dependencias adicionales inyectadas por constructor
 - [ ] NO instancia repositorios internamente
+- [ ] Variables de entorno via `getEnv()`, nunca `process.env`
+- [ ] Si el servicio crece mucho (≥400 líneas), considerar extraer sub-servicios

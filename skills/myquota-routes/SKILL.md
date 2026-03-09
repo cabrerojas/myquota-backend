@@ -11,6 +11,8 @@ metadata:
     - "Creating routes"
     - "Configuring authentication"
     - "Setting up dependency injection"
+    - "Adding request validation"
+    - "Creating Zod schemas"
 ---
 
 ## Propósito
@@ -27,6 +29,8 @@ import { MyEntityController } from "./myEntity.controller";
 import { MyEntityRepository } from "./myEntity.repository";
 import { MyEntityService } from "./myEntity.service";
 import { authenticate } from "@shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import { createMyEntitySchema, updateMyEntitySchema } from "./myEntity.schemas";
 
 const createMyEntityRouter = (): Router => {
   const router = Router();
@@ -61,7 +65,7 @@ const createMyEntityRouter = (): Router => {
     return res.locals.myEntityController.getAll(req, res);
   });
 
-  router.post("/myEntities", (req: Request, res: Response) => {
+  router.post("/myEntities", validate(createMyEntitySchema), (req: Request, res: Response) => {
     return res.locals.myEntityController.create(req, res);
   });
 
@@ -69,7 +73,7 @@ const createMyEntityRouter = (): Router => {
     return res.locals.myEntityController.getById(req, res);
   });
 
-  router.put("/myEntities/:itemId", (req: Request, res: Response) => {
+  router.put("/myEntities/:itemId", validate(updateMyEntitySchema), (req: Request, res: Response) => {
     return res.locals.myEntityController.update(req, res);
   });
 
@@ -140,6 +144,11 @@ router.get("/myEntities", (req: Request, res: Response) => {
   return res.locals.myEntityController.getAll(req, res);
 });
 
+// ✅ CORRECTO — POST/PUT con validate middleware
+router.post("/myEntities", validate(createMyEntitySchema), (req: Request, res: Response) => {
+  return res.locals.myEntityController.create(req, res);
+});
+
 // ❌ INCORRECTO — lógica en el handler
 router.get("/myEntities", async (req, res) => {
   try {
@@ -147,6 +156,51 @@ router.get("/myEntities", async (req, res) => {
     res.json(items);
   } catch (err) { ... }
 });
+```
+
+---
+
+## Validación con Zod
+
+Todas las rutas POST/PUT deben usar `validate()` middleware que valida `req.body` contra un Zod schema antes de llegar al controller.
+
+### Definir schemas
+
+```typescript
+// src/modules/<moduleName>/<moduleName>.schemas.ts
+import { z } from "zod";
+
+export const createMyEntitySchema = z
+  .object({
+    name: z.string().min(1),
+    amount: z.number().min(0),
+  })
+  .strict();
+
+export const updateMyEntitySchema = createMyEntitySchema.partial();
+```
+
+### Usar en rutas
+
+```typescript
+import { validate } from "@shared/middlewares/validate.middleware";
+import { createMyEntitySchema, updateMyEntitySchema } from "./myEntity.schemas";
+
+router.post("/myEntities", validate(createMyEntitySchema), (req, res) => {
+  return res.locals.myEntityController.create(req, res);
+});
+
+router.put("/myEntities/:id", validate(updateMyEntitySchema), (req, res) => {
+  return res.locals.myEntityController.update(req, res);
+});
+```
+
+### Reglas de schemas
+
+- Usar `.strict()` para rechazar campos extra
+- Schema de update es `.partial()` del create
+- Fechas: `z.string().or(z.coerce.date())`
+- Un archivo por módulo: `<moduleName>.schemas.ts`
 ```
 
 ---
@@ -268,5 +322,8 @@ const service = new MyEntityService(repository);
 - [ ] Middleware de DI valida userId antes de instanciar
 - [ ] Controller guardado en `res.locals`
 - [ ] Handlers son thin wrappers: `(req, res) => res.locals.controller.method(req, res)`
+- [ ] POST/PUT usan `validate(zodSchema)` middleware
+- [ ] Zod schemas definidos en `<module>.schemas.ts` con `.strict()`
 - [ ] Router montado en `index.ts` con `app.use("/api", ...)`
 - [ ] Rutas anidadas validan todos los IDs necesarios
+- [ ] Variables de entorno via `getEnv()`, nunca `process.env`

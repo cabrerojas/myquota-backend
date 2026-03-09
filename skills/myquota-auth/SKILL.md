@@ -54,6 +54,7 @@ Ubicación: `src/shared/middlewares/auth.middleware.ts`
 ```typescript
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { getEnv } from "@config/env.validation";
 
 export const authenticate = (
   req: Request,
@@ -69,7 +70,7 @@ export const authenticate = (
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    const decoded = jwt.verify(token, getEnv().JWT_SECRET) as {
       userId: string;
     };
 
@@ -117,16 +118,17 @@ Esto permite usar `req.user?.userId` en cualquier parte del código con type saf
 ```typescript
 // En AuthService
 generateTokens(userId: string): { accessToken: string; refreshToken: string } {
+  const env = getEnv();
   const accessToken = jwt.sign(
     { userId },
-    process.env.JWT_SECRET!,
-    { expiresIn: "15m" }
+    env.JWT_SECRET,
+    { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN }
   );
 
   const refreshToken = jwt.sign(
     { userId },
-    process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: "7d" }
+    env.JWT_REFRESH_SECRET,
+    { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN }
   );
 
   return { accessToken, refreshToken };
@@ -150,7 +152,7 @@ refreshToken = async (req: Request, res: Response): Promise<void> => {
 
     const decoded = jwt.verify(
       refreshToken,
-      process.env.JWT_REFRESH_SECRET!,
+      getEnv().JWT_REFRESH_SECRET,
     ) as { userId: string };
 
     const tokens = this.service.generateTokens(decoded.userId);
@@ -165,12 +167,18 @@ refreshToken = async (req: Request, res: Response): Promise<void> => {
 
 ## Variables de Entorno
 
-| Variable             | Propósito                         |
-| -------------------- | --------------------------------- |
-| `JWT_SECRET`         | Secret para firmar access tokens  |
-| `JWT_REFRESH_SECRET` | Secret para firmar refresh tokens |
+Acceder siempre via `getEnv()` de `@config/env.validation`.
+
+| Variable                  | Propósito                                 |
+| ------------------------- | ----------------------------------------- |
+| `JWT_SECRET`              | Secret para firmar access tokens          |
+| `JWT_REFRESH_SECRET`      | Secret para firmar refresh tokens         |
+| `GOOGLE_CLIENT_ID`        | Google OAuth client ID                    |
+| `ACCESS_TOKEN_EXPIRES_IN` | TTL del access token (default "15m")      |
+| `REFRESH_TOKEN_EXPIRES_IN`| TTL del refresh token (default "30d")     |
 
 **Importante**: Usar secrets diferentes para access y refresh tokens.
+**Importante**: NUNCA usar `process.env` directo — siempre `getEnv()`.
 
 ---
 
