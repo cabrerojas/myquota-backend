@@ -158,32 +158,39 @@ async customCreate(data: Partial<MyEntity>): Promise<MyEntity> {
 
 ## Regla de Límites
 
-**Un repositorio gestiona SOLO su colección.** NO acceder a subcolecciones de otras entidades.
+**Un repositorio gestiona SOLO su colección y sus subcolecciones directas.** NO importar ni depender de otros repositorios.
+
+Acceder a subcollections dentro de la jerarquía propia está permitido (e.g., TransactionRepository accediendo a `quotas` que es subcolección de transactions).
 
 ```typescript
-// ❌ INCORRECTO: TransactionRepository accediendo a quotas
+// ❌ INCORRECTO: Repository importando otro repository
+import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
+
 class TransactionRepository {
-  async getWithQuotas(id: string) {
-    const transaction = await this.findById(id);
-    // NO hacer esto:
-    const quotasRef = this.collection.doc(id).collection("quotas");
+  constructor(
+    userId: string,
+    creditCardId: string,
+    private creditCardRepo: CreditCardRepository, // NO
+  ) { ... }
+}
+
+// ✅ CORRECTO: Acceder a subcollection propia (quotas dentro de transactions)
+class TransactionRepository {
+  getQuotasCollection(transactionId: string) {
+    return this.repository.doc(transactionId).collection("quotas");
   }
 }
 
-// ✅ CORRECTO: Usar QuotaRepository desde el service
+// ✅ CORRECTO: Cross-module access via service (DI)
 class TransactionService {
   constructor(
     private transactionRepo: TransactionRepository,
-    private quotaRepo: QuotaRepository, // Inyectado
+    private creditCardRepo: CreditCardRepository, // Inyectado desde routes
   ) {}
-
-  async getWithQuotas(id: string) {
-    const transaction = await this.transactionRepo.findById(id);
-    const quotas = await this.quotaRepo.findAll();
-    return { ...transaction, quotas };
-  }
 }
 ```
+
+**Regla clave**: Si necesitas datos de otra colección, inyéctalos como dependencia del **service**, no del repository.
 
 ---
 

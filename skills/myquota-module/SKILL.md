@@ -24,6 +24,7 @@ Crear módulos completos en MyQuota Backend siguiendo la arquitectura establecid
 ```
 src/modules/<moduleName>/
 ├── <moduleName>.model.ts        # Entidad con IBaseEntity
+├── <moduleName>.schemas.ts      # Zod schemas para validar req.body
 ├── <moduleName>.repository.ts   # Extiende FirestoreRepository<T>
 ├── <moduleName>.service.ts      # Extiende BaseService<T>
 ├── <moduleName>.controller.ts   # Arrow functions con try/catch
@@ -32,8 +33,9 @@ src/modules/<moduleName>/
 
 **Excepciones**:
 
-- Módulos de solo lectura (como `stats`) pueden omitir model y repository
+- Módulos de solo lectura (como `stats`) pueden omitir model, repository y schemas
 - Sub-módulos sin rutas propias pueden omitir controller y routes
+- Módulos complejos pueden tener sub-servicios adicionales (e.g., `emailImport.service.ts`)
 
 ---
 
@@ -245,6 +247,32 @@ export class MyEntityController {
 
 ---
 
+## Template: Schemas (Zod)
+
+```typescript
+// src/modules/<moduleName>/<moduleName>.schemas.ts
+import { z } from "zod";
+
+export const createMyEntitySchema = z
+  .object({
+    name: z.string().min(1),
+    amount: z.number().min(0),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateMyEntitySchema = createMyEntitySchema.partial();
+```
+
+### Reglas de Schemas
+
+- Usar `.strict()` para rechazar campos extra
+- Schema de update es `.partial()` del create
+- Fechas: `z.string().or(z.coerce.date())` para aceptar ISO strings o Date
+- Un archivo por módulo: `<moduleName>.schemas.ts`
+
+---
+
 ## Template: Routes
 
 ```typescript
@@ -254,6 +282,8 @@ import { MyEntityController } from "./<moduleName>.controller";
 import { MyEntityRepository } from "./<moduleName>.repository";
 import { MyEntityService } from "./<moduleName>.service";
 import { authenticate } from "@shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import { createMyEntitySchema, updateMyEntitySchema } from "./<moduleName>.schemas";
 
 const createMyEntityRouter = (): Router => {
   const router = Router();
@@ -288,7 +318,7 @@ const createMyEntityRouter = (): Router => {
     return res.locals.myEntityController.getAll(req, res);
   });
 
-  router.post("/myEntities", (req: Request, res: Response) => {
+  router.post("/myEntities", validate(createMyEntitySchema), (req: Request, res: Response) => {
     return res.locals.myEntityController.create(req, res);
   });
 
@@ -296,7 +326,7 @@ const createMyEntityRouter = (): Router => {
     return res.locals.myEntityController.getById(req, res);
   });
 
-  router.put("/myEntities/:itemId", (req: Request, res: Response) => {
+  router.put("/myEntities/:itemId", validate(updateMyEntitySchema), (req: Request, res: Response) => {
     return res.locals.myEntityController.update(req, res);
   });
 
@@ -316,6 +346,7 @@ export default createMyEntityRouter;
 - DI por request: instanciar repo→service→controller en middleware
 - `authenticate` SIEMPRE primero (excepto rutas públicas)
 - Handlers son thin wrappers: `(req, res) => res.locals.controller.method(req, res)`
+- POST/PUT usan `validate(zodSchema)` middleware antes del handler
 
 ---
 
@@ -339,11 +370,14 @@ app.use(errorHandler);
 ## Checklist de Módulo Completo
 
 - [ ] `model.ts` creado con `implements IBaseEntity`
+- [ ] `schemas.ts` creado con Zod schemas (`.strict()`)
 - [ ] `repository.ts` extiende `FirestoreRepository<T>`
 - [ ] `service.ts` extiende `BaseService<T>` y recibe repo por constructor
 - [ ] `controller.ts` usa arrow functions con try/catch
 - [ ] `routes.ts` usa patrón `res.locals` con `authenticate`
+- [ ] POST/PUT usan `validate(zodSchema)` middleware
 - [ ] Router montado en `index.ts`
 - [ ] Imports usan aliases `@shared/`, `@modules/`
 - [ ] Campos de entidad en camelCase
+- [ ] Variables de entorno via `getEnv()`, nunca `process.env`
 - [ ] `npm run lint` pasa

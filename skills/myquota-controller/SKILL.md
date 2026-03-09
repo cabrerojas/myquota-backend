@@ -165,6 +165,8 @@ getById = async (req: Request, res: Response): Promise<void> => {
 
 ### POST Create
 
+`req.body` llega pre-validado por el middleware `validate(zodSchema)` en las rutas. No es necesario validar estructura en el controller.
+
 ```typescript
 create = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -268,4 +270,5 @@ catch (error) {
 - [ ] Códigos HTTP correctos (200, 201, 404, 500)
 - [ ] Params no usados tienen prefijo `_`
 - [ ] NO hay lógica de negocio en el controller
+- [ ] `req.body` llega pre-validado por Zod (validación se hace en routes)
 - [ ] Respuestas JSON consistentes
