@@ -109,6 +109,5 @@ myquota-backend/
 ## Dependencias Principales
 
 - **firebase-admin**: SDK de Firebase para acceso a Firestore y autenticación.
-- **fireorm**: ORM para firestore.
 - **express**: Framework para construir la API REST.
 - **typescript**: Superconjunto de JavaScript que añade tipado estático.

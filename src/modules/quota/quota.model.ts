@@ -1,7 +1,7 @@
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
 
 export class Quota implements IBaseEntity {
-  id!: string; // Fireorm requiere un ID explícito
+  id!: string;
   transactionId!: string; // ID de la transacción asociada
   amount!: number; // Monto de la cuota
   dueDate!: Date; // Fecha de vencimiento de la cuota
