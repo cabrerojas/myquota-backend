@@ -68,7 +68,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
   }
 
   /**
-   * Marca como pagadas todas las cuotas pendientes cuyo due_date
+   * Marca como pagadas todas las cuotas pendientes cuyo dueDate
    * cae dentro del rango del período de facturación.
    */
   async payBillingPeriod(
@@ -103,7 +103,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
 
       const pendingInRange = quotas.filter((q) => {
         if (q.status !== "pending") return false;
-        const dueTime = new Date(q.due_date).getTime();
+        const dueTime = new Date(q.dueDate).getTime();
         return dueTime >= startDate && dueTime <= endDate;
       });
 
@@ -114,7 +114,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
           .doc(quota.id);
         await quotaRef.update({
           status: "paid",
-          payment_date: paymentDate,
+          paymentDate: paymentDate,
           updatedAt: paymentDate,
         });
         paidCount++;

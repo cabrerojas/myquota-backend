@@ -477,7 +477,7 @@ export class TransactionService extends BaseService<Transaction> {
     for (let i = 1; i <= data.totalInstallments; i++) {
       const isPaid = i <= data.paidInstallments;
 
-      // Calcular due_date: cuotas van mes a mes
+      // Calcular dueDate: cuotas van mes a mes
       // Cuota paidInstallments cae en lastPaidMonth
       // Offset from lastPaidMonth: i - paidInstallments
       const monthOffset = i - data.paidInstallments;
@@ -487,10 +487,10 @@ export class TransactionService extends BaseService<Transaction> {
         id: this.repository.repository.doc().id,
         transactionId,
         amount: data.quotaAmount,
-        due_date: dueDate,
+        dueDate: dueDate,
         status: isPaid ? "paid" : "pending",
         currency: data.currency,
-        payment_date: isPaid ? dueDate : null,
+        paymentDate: isPaid ? dueDate : null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
@@ -583,10 +583,10 @@ export class TransactionService extends BaseService<Transaction> {
         id: this.repository.repository.doc().id,
         transactionId,
         amount: data.quotaAmount,
-        due_date: dueDate,
+        dueDate: dueDate,
         status: isPaid ? "paid" : "pending",
         currency: data.currency,
-        payment_date: isPaid ? dueDate : null,
+        paymentDate: isPaid ? dueDate : null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
@@ -644,7 +644,7 @@ export class TransactionService extends BaseService<Transaction> {
           id: this.repository.repository.doc().id,
           transactionId: transaction.id,
           amount: transaction.amount,
-          due_date: transaction.transactionDate,
+          dueDate: transaction.transactionDate,
           status: "pending",
           currency: transaction.currency,
           createdAt: new Date(),
@@ -712,9 +712,9 @@ export class TransactionService extends BaseService<Transaction> {
       for (const billingPeriod of formattedBillingPeriods) {
         periodSumMap[billingPeriod.periodKey] = {};
         const quotasInPeriod = allQuotas.filter((quota) => {
-          if (!quota.due_date) return false;
+          if (!quota.dueDate) return false;
           const quotaDate = new Date(
-            convertUtcToChileTime(quota.due_date, "yyyy-MM-dd HH:mm:ss"),
+            convertUtcToChileTime(quota.dueDate, "yyyy-MM-dd HH:mm:ss"),
           );
           return (
             quotaDate >= billingPeriod.startDate &&

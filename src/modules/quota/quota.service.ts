@@ -36,7 +36,7 @@ export class QuotaService extends BaseService<Quota> {
   /**
    * Divide una transacción en N cuotas mensuales.
    * Elimina las cuotas existentes y crea N nuevas con montos divididos
-   * y due_dates mensuales a partir de la fecha de la transacción.
+   * y dueDates mensuales a partir de la fecha de la transacción.
    */
   async splitTransactionIntoQuotas(
     creditCardId: string,
@@ -70,7 +70,7 @@ export class QuotaService extends BaseService<Quota> {
     for (let i = 0; i < numberOfQuotas; i++) {
       const dueDate = new Date(transactionDate);
       if (numberOfQuotas === 1) {
-        // Pago único: due_date = fecha de la transacción
+        // Pago único: dueDate = fecha de la transacción
       } else {
         // Cuotas: primera cuota al mes siguiente, y así sucesivamente
         dueDate.setMonth(dueDate.getMonth() + i + 1);
@@ -86,7 +86,7 @@ export class QuotaService extends BaseService<Quota> {
         id: this.transactionRepository.repository.doc().id,
         transactionId,
         amount,
-        due_date: dueDate,
+        dueDate: dueDate,
         status: "pending",
         currency: transaction.currency,
         createdAt: new Date(),
