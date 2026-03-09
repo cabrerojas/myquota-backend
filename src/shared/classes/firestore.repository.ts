@@ -49,17 +49,10 @@ export class FirestoreRepository<
 
   constructor(path: string[], collectionName: string) {
     if (!collectionName) {
-      throw new Error("❌ Collection name is required");
+      throw new Error("Collection name is required");
     }
 
-    console.log("📌 Path recibido:", path);
-    console.log("📌 Collection Name recibido:", collectionName);
-
     if (!path.length) {
-      console.warn(
-        "⚠️ No se recibió un path, inicializando colección raíz:",
-        collectionName,
-      );
       this.repository = db.collection(
         collectionName,
       ) as FirebaseFirestore.CollectionReference<T>;
@@ -70,21 +63,15 @@ export class FirestoreRepository<
         .collection(path[0])
         .doc(path[1]);
 
-      // 🔹 Si hay más niveles en el path, construimos la referencia a subcolecciones
       for (let i = 2; i < path.length; i += 2) {
         if (!path[i + 1]) {
-          console.error(
-            `❌ Error: El path está incompleto en la posición ${i}`,
-          );
           throw new Error(
-            `❌ Error en el path: Se esperaba otro segmento después de ${path[i]}`,
+            `Error en el path: Se esperaba otro segmento después de ${path[i]}`,
           );
         }
         ref = ref.collection(path[i]).doc(path[i + 1]);
       }
 
-      // 🔹 La colección final es `collectionName` dentro del documento
-      console.log("✅ Documento Referencia Final:", ref.path);
       this.repository = ref.collection(
         collectionName,
       ) as FirebaseFirestore.CollectionReference<T>;
@@ -142,29 +129,18 @@ export class FirestoreRepository<
   async findById(id: string): Promise<T | null> {
     try {
       if (!id) {
-        throw new Error("❌ El ID proporcionado es inválido.");
+        throw new Error("El ID proporcionado es inválido.");
       }
 
-      console.log(
-        "📌 Buscando en la colección:",
-        this.repository.path,
-        "ID:",
-        id,
-      );
-
-      const docRef = this.repository.doc(id);
-      console.log("📌 Documento Referencia Final:", docRef.path);
-
-      const doc = await docRef.get();
+      const doc = await this.repository.doc(id).get();
 
       if (!doc.exists || doc.data()?.deletedAt) {
-        console.warn(`⚠️ Documento con ID ${id} no encontrado o eliminado.`);
         return null;
       }
 
       return this.sanitizeTimestamps(doc.data() as T);
     } catch (error) {
-      console.error("❌ Error en FirestoreRepository.findById:", error);
+      console.error("Error in FirestoreRepository.findById:", error);
       throw new RepositoryError("Error find entity by id", 500);
     }
   }
