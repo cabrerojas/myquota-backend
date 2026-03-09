@@ -55,7 +55,14 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
     const snapshot = await quotasCollection
       .where("deletedAt", "==", null)
       .get();
-    return snapshot.docs.map((doc) => doc.data() as Quota);
+    return snapshot.docs.map((doc) => {
+      const raw = doc.data() as unknown as Record<string, unknown>;
+      return {
+        ...raw,
+        dueDate: raw.dueDate ?? raw.due_date,
+        paymentDate: raw.paymentDate ?? raw.payment_date,
+      } as Quota;
+    });
   }
 
   // Eliminar todas las cuotas de una transacción (hard delete)

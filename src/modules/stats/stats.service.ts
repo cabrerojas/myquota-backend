@@ -177,7 +177,7 @@ export class StatsService {
             pendingCount++;
 
             // Find which billing period this quota belongs to
-            const dueTime = new Date(q.due_date as unknown as string).getTime();
+            const dueTime = new Date(q.dueDate as unknown as string).getTime();
             const periodMonth = allBillingPeriods.find((p) => {
               return (
                 dueTime >= new Date(p.startDate).getTime() &&
@@ -186,7 +186,7 @@ export class StatsService {
             })?.month;
 
             // Compute calendar month key for this quota
-            const dueDate = new Date(q.due_date as unknown as string);
+            const dueDate = new Date(q.dueDate as unknown as string);
             const calKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
 
             const bucketKey = periodMonth ?? calKey;
@@ -205,7 +205,7 @@ export class StatsService {
               bucket.CLP += q.amount;
               totalCLP += q.amount;
             }
-            // Keep sortKey as the earliest due_date in this bucket
+            // Keep sortKey as the earliest dueDate in this bucket
             if (dueTime < bucket.sortKey) bucket.sortKey = dueTime;
 
             // Next payment = quotas in current billing period or current calendar month

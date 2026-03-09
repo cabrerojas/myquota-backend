@@ -4,10 +4,10 @@ export class Quota implements IBaseEntity {
   id!: string; // Fireorm requiere un ID explícito
   transactionId!: string; // ID de la transacción asociada
   amount!: number; // Monto de la cuota
-  due_date!: Date; // Fecha de vencimiento de la cuota
+  dueDate!: Date; // Fecha de vencimiento de la cuota
   status!: "pending" | "paid"; // Estado de la cuota
   currency!: string; // Moneda de la cuota
-  payment_date?: Date | null; // Fecha de pago de la cuota (opcional)
+  paymentDate?: Date | null; // Fecha de pago de la cuota (opcional)
   createdAt!: Date;
   updatedAt!: Date;
   deletedAt!: Date | null;
