@@ -219,7 +219,7 @@ Before delivering code:
 Existing issues to resolve progressively:
 
 1. ~~`TransactionService` too large (~740 lines)~~ — EmailImportService, ManualTransactionService extracted, getMonthlyQuotaSum moved to StatsService (~280 lines remaining)
-2. Repository boundary violations — repos accessing other collections
+2. ~~Repository boundary violations~~ — TransactionRepository no longer depends on CreditCardRepository; cross-card logic moved to EmailImportService (PR #16)
 3. ~~`stats` module incomplete~~ — empty repository deleted (PR #9)
 4. ~~`UserService` constructor bug~~ — fixed (PR #8)
 5. ~~`MerchantPattern` doesn't follow pattern~~ — now implements IBaseEntity (PR #9)
