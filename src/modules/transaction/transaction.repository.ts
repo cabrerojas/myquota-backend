@@ -61,6 +61,7 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
         ...raw,
         dueDate: raw.dueDate ?? raw.due_date,
         paymentDate: raw.paymentDate ?? raw.payment_date,
+        currency: raw.currency === "Dolar" ? "USD" : raw.currency,
       } as Quota;
     });
   }
