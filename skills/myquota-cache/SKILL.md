@@ -173,9 +173,9 @@ CacheKeys.debtSummary(userId)
 CacheKeys.monthlyStats(userId, creditCardId)
 
 // TTL disponibles
-CacheTTL.SHORT  // 5 min
-CacheTTL.MEDIUM // 15 min
-CacheTTL.LONG   // 30 min
+CacheTTL.SHORT  // 30 seg
+CacheTTL.MEDIUM // 2 min
+CacheTTL.LONG   // 5 min
 
 // Métodos
 CacheService.get<T>(key): T | null

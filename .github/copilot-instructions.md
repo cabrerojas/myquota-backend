@@ -61,6 +61,8 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 | Modifying backend models        | `sync-types`         |
 | Syncing types with frontend     | `sync-types`         |
 | Adding fields to entities       | `sync-types`         |
+| Adding request validation       | `myquota-routes`     |
+| Creating Zod schemas            | `myquota-routes`     |
 
 ## <!-- Skills extracted from metadata.auto_invoke in each SKILL.md -->
 
@@ -68,12 +70,14 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 
 | Dato     | Valor                                   |
 | -------- | --------------------------------------- |
-| Runtime  | Node 22 + Express 4                     |
-| Language | TypeScript 5.6 (strict)                 |
-| Database | Firestore (firebase-admin)              |
-| Auth     | Google Sign-In → JWT (access + refresh) |
-| Linting  | ESLint 9 (flat config)                  |
-| Deploy   | Render                                  |
+| Runtime     | Node 22 + Express 4                     |
+| Language    | TypeScript 5.6 (strict)                 |
+| Database    | Firestore (firebase-admin)              |
+| Auth        | Google Sign-In → JWT (access + refresh) |
+| Validation  | Zod 4 (req.body + env vars)             |
+| Security    | helmet + cors + express-rate-limit      |
+| Linting     | ESLint 9 (flat config)                  |
+| Deploy      | Render                                  |
 
 **Entry point**: `src/index.ts` — mounts routers + errorHandler
 
@@ -84,10 +88,12 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 ```
 src/
 ├── index.ts                    # Express app, mounts routers
-├── config/                     # Firebase, Gmail OAuth
+├── config/                     # Firebase, Gmail OAuth, env validation
+│   └── env.validation.ts       # Zod schema for env vars, getEnv()
 ├── modules/                    # Feature-based modules
 │   └── <module>/
 │       ├── <module>.model.ts
+│       ├── <module>.schemas.ts  # Zod schemas for req.body validation
 │       ├── <module>.repository.ts
 │       ├── <module>.service.ts
 │       ├── <module>.controller.ts
@@ -95,10 +101,13 @@ src/
 └── shared/                     # Shared code
     ├── classes/                # BaseService, FirestoreRepository
     ├── interfaces/             # IBaseEntity, IBaseRepository
-    ├── middlewares/            # authenticate, errorHandler
+    ├── middlewares/            # authenticate, errorHandler, validate
+    ├── services/               # CacheService (in-memory TTL cache)
     ├── errors/                 # RepositoryError, AuthError
     └── utils/                  # date.utils, array.utils
 ```
+
+**Módulos con sub-servicios**: Módulos complejos pueden tener servicios especializados adicionales (e.g., `emailImport.service.ts`, `manualTransaction.service.ts`) que manejan concerns específicos extraídos del servicio principal.
 
 ---
 
@@ -114,6 +123,9 @@ src/
 6. **Arrow functions** en controllers
 7. **try/catch** en cada método de controller
 8. **`error instanceof Error ? error.message : "Error desconocido"`** para extraer mensajes
+9. **`getEnv()`** para acceder a variables de entorno — importar de `@config/env.validation`
+10. **Zod schemas + `validate()` middleware** para validar `req.body` en rutas con POST/PUT
+11. **`<module>.schemas.ts`** para definir Zod schemas de cada módulo
 
 ### NEVER
 
@@ -123,6 +135,8 @@ src/
 4. **Rutas relativas** (`../../`) fuera del módulo
 5. **`console.log`** en código nuevo — solo `console.error` en catches
 6. **Pasar objeto `error` raw** a `res.json()` — siempre extraer `.message`
+7. **`process.env`** directo — siempre usar `getEnv()` de `@config/env.validation`
+8. **`req.body` sin validar** — siempre usar Zod schema + `validate()` middleware
 
 ---
 
@@ -183,13 +197,21 @@ npm run lint     # ESLint check
 
 ## Environment Variables
 
-| Variable              | Propósito                  | Required   |
-| --------------------- | -------------------------- | ---------- |
-| `SERVICE_ACCOUNT_KEY` | Firebase SA (base64)       | Yes (prod) |
-| `FIREBASE_DB_URL`     | Firestore URL              | Yes        |
-| `JWT_SECRET`          | JWT signing                | Yes        |
-| `JWT_REFRESH_SECRET`  | Refresh token signing      | Yes        |
-| `PORT`                | Server port (default 3000) | No         |
+Validadas con Zod en `src/config/env.validation.ts`. Acceder siempre via `getEnv()`.
+
+| Variable                  | Propósito                           | Required |
+| ------------------------- | ----------------------------------- | -------- |
+| `SERVICE_ACCOUNT_KEY`     | Firebase SA (base64)                | Yes      |
+| `FIREBASE_DB_URL`         | Firestore URL                       | Yes      |
+| `JWT_SECRET`              | JWT signing                         | Yes      |
+| `JWT_REFRESH_SECRET`      | Refresh token signing               | Yes      |
+| `GOOGLE_CLIENT_ID`        | Google OAuth client ID              | Yes      |
+| `PORT`                    | Server port (default 3000)          | No       |
+| `ALLOWED_ORIGINS`         | CORS origins comma-separated        | No       |
+| `ACCESS_TOKEN_EXPIRES_IN` | Access token TTL (default "15m")    | No       |
+| `REFRESH_TOKEN_EXPIRES_IN`| Refresh token TTL (default "30d")   | No       |
+| `GOOGLE_CLIENT_SECRET`    | Google OAuth client secret          | No       |
+| `CREDENTIALS_JSON`        | Gmail API credentials               | No       |
 
 ---
 
@@ -211,6 +233,9 @@ Before delivering code:
 - [ ] `npm run lint` passes
 - [ ] Entity fields are camelCase
 - [ ] No unnecessary `console.log` (only `console.error` in catches)
+- [ ] POST/PUT routes use `validate(zodSchema)` middleware
+- [ ] Zod schemas defined in `<module>.schemas.ts` with `.strict()`
+- [ ] Environment access via `getEnv()`, never `process.env`
 
 # Skills & Docs QA
 
@@ -242,15 +267,18 @@ Existing issues to resolve progressively:
 
 ## Key Files
 
-| File                                         | Purpose                      |
-| -------------------------------------------- | ---------------------------- |
-| `src/index.ts`                               | Express app, router mounting |
-| `src/config/firebase.ts`                     | Firebase init, exports `db`  |
-| `src/shared/classes/firestore.repository.ts` | Generic Firestore CRUD       |
-| `src/shared/classes/base.service.ts`         | Generic service CRUD         |
-| `src/shared/middlewares/auth.middleware.ts`  | JWT authentication           |
-| `src/shared/errors/custom.error.ts`          | RepositoryError, AuthError   |
-| `src/shared/utils/date.utils.ts`             | Chile timezone utilities     |
+| File                                            | Purpose                            |
+| ----------------------------------------------- | ---------------------------------- |
+| `src/index.ts`                                  | Express app, router mounting       |
+| `src/config/firebase.ts`                        | Firebase init, exports `db`        |
+| `src/config/env.validation.ts`                  | Zod env schema, `getEnv()`         |
+| `src/shared/classes/firestore.repository.ts`    | Generic Firestore CRUD             |
+| `src/shared/classes/base.service.ts`            | Generic service CRUD               |
+| `src/shared/middlewares/auth.middleware.ts`      | JWT authentication                 |
+| `src/shared/middlewares/validate.middleware.ts`  | Zod req.body validation middleware |
+| `src/shared/services/cache.service.ts`           | In-memory TTL cache + CacheKeys    |
+| `src/shared/errors/custom.error.ts`             | RepositoryError, AuthError         |
+| `src/shared/utils/date.utils.ts`                | Chile timezone utilities           |
 
 ---
 
