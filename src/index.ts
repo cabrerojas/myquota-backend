@@ -19,6 +19,9 @@ import createCategoryRouter from "./modules/category";
 
 const app = express();
 
+// Behind reverse proxy (Render, etc.) — needed for rate limiting & correct client IP
+app.set("trust proxy", 1);
+
 // --- Security middleware ---
 app.use(helmet());
 
