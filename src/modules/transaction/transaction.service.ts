@@ -402,7 +402,7 @@ export class TransactionService extends BaseService<Transaction> {
     const amountMatch = textContent.match(
       /(?:US\$|CLP\$|\$)(\d{1,64}(?:[.,]\d{3})*(?:[.,]\d{2})?)/,
     );
-    const currency = textContent.includes("US$") ? "Dolar" : "CLP";
+    const currency = textContent.includes("US$") ? "USD" : "CLP";
 
     // Formatear el monto extraído para asegurar que siempre sea un número válido
     let amount = null;

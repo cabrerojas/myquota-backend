@@ -30,9 +30,9 @@ interface DebtSummary {
 interface MonthlyStatEntry {
   month: string;
   totalCLP: number;
-  totalDolar: number;
+  totalUSD: number;
   categoryBreakdown: {
-    [category: string]: { CLP: number; Dolar: number };
+    [category: string]: { CLP: number; USD: number };
   };
 }
 
@@ -198,7 +198,7 @@ export class StatsService {
             if (!periodAmounts.has(bucketKey)) {
               periodAmounts.set(bucketKey, bucket);
             }
-            if (q.currency === "Dolar") {
+            if (q.currency === "USD") {
               bucket.USD += q.amount;
               totalUSD += q.amount;
             } else {
@@ -216,7 +216,7 @@ export class StatsService {
               (!periodMonth && calKey === currentCalKey);
 
             if (isCurrentPeriod) {
-              if (q.currency === "Dolar") {
+              if (q.currency === "USD") {
                 nextMonthUSD += q.amount;
               } else {
                 nextMonthCLP += q.amount;
@@ -264,7 +264,7 @@ export class StatsService {
     if (cached !== null) return cached;
 
     // L2: Firestore materialized view (1 read)
-    // schemaVersion: 2 = categoryBreakdown keyed by category name (not merchant)
+    // schemaVersion: 3 = currency uses "USD" instead of "Dolar"
     try {
       const doc = await StatsService.monthlyStatsRef(
         userId,
@@ -275,7 +275,7 @@ export class StatsService {
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
         const isStale =
           raw.needsRecompute === true || ageMs >= SUMMARY_MAX_AGE_MS;
-        if (!isStale && raw.schemaVersion === 2) {
+        if (!isStale && raw.schemaVersion === 3) {
           const stats = raw.data as MonthlyStatEntry[];
           CacheService.set(memKey, stats, CacheTTL.LONG);
           return stats;
@@ -291,7 +291,7 @@ export class StatsService {
       .set({
         data: result,
         computedAt: new Date().toISOString(),
-        schemaVersion: 2,
+        schemaVersion: 3,
       })
       .catch((err) => console.error("Failed to persist monthly stats:", err));
     CacheService.set(memKey, result, CacheTTL.LONG);
@@ -324,9 +324,9 @@ export class StatsService {
     const billingStats: {
       [month: string]: {
         totalCLP: number;
-        totalDolar: number;
+        totalUSD: number;
         categoryBreakdown: {
-          [category: string]: { CLP: number; Dolar: number };
+          [category: string]: { CLP: number; USD: number };
         };
       };
     } = {};
@@ -334,7 +334,7 @@ export class StatsService {
     for (const period of billingPeriods) {
       billingStats[period.month] = {
         totalCLP: 0,
-        totalDolar: 0,
+        totalUSD: 0,
         categoryBreakdown: {},
       };
 
@@ -351,7 +351,9 @@ export class StatsService {
           transactionDate >= periodStartDate &&
           transactionDate <= periodEndDate
         ) {
-          const currency = transaction.currency as "CLP" | "Dolar"; // "CLP" o "Dolar"
+          const currency = (
+            transaction.currency === "Dolar" ? "USD" : transaction.currency
+          ) as "CLP" | "USD";
           const amount = transaction.amount;
           const category =
             (transaction.categoryId && catMap.get(transaction.categoryId)) ||
@@ -360,15 +362,15 @@ export class StatsService {
 
           if (currency === "CLP") {
             billingStats[period.month].totalCLP += amount;
-          } else if (currency === "Dolar") {
-            billingStats[period.month].totalDolar += amount;
+          } else if (currency === "USD") {
+            billingStats[period.month].totalUSD += amount;
           }
 
           // Asegurar que la categoría exista en el breakdown
           if (!billingStats[period.month].categoryBreakdown[category]) {
             billingStats[period.month].categoryBreakdown[category] = {
               CLP: 0,
-              Dolar: 0,
+              USD: 0,
             };
           }
 
@@ -383,10 +385,10 @@ export class StatsService {
       .map(([month, data]) => ({
         month,
         totalCLP: data.totalCLP,
-        totalDolar: data.totalDolar,
+        totalUSD: data.totalUSD,
         categoryBreakdown: data.categoryBreakdown,
       }))
-      .filter((entry) => entry.totalCLP > 0 || entry.totalDolar > 0);
+      .filter((entry) => entry.totalCLP > 0 || entry.totalUSD > 0);
   }
 
   // ---------------------------------------------------------------------------
@@ -469,7 +471,7 @@ export class StatsService {
           StatsService.monthlyStatsRef(userId, creditCardId).set({
             data: result,
             computedAt: new Date().toISOString(),
-            schemaVersion: 2,
+            schemaVersion: 3,
           }),
         )
         .catch((err) =>
