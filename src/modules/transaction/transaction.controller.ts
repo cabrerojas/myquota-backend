@@ -3,7 +3,7 @@ import { TransactionService } from "./transaction.service";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
 import { StatsService } from "@/modules/stats/stats.service";
-
+import { AuthError } from "@shared/errors/custom.error";
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
 
@@ -454,6 +454,12 @@ export class TransactionController {
       });
     } catch (error) {
       console.error("Error importing transactions:", error);
+      if (error instanceof AuthError) {
+        // treat as unauthenticated so frontend can redirect to login
+        res.status(error.statusCode).json({ message: error.message });
+        return;
+      }
+
       res.status(500).json({
         message: "Error al importar transacciones",
         error: error instanceof Error ? error.message : "Unknown error",

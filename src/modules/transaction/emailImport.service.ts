@@ -8,7 +8,7 @@ import { getEnv } from "@config/env.validation";
 import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
 import { Transaction } from "./transaction.model";
 import { CategoryService } from "@/modules/category/category.service";
-
+import { AuthError } from "@shared/errors/custom.error";
 /**
  * Handles Gmail integration and bank-email parsing.
  *
@@ -29,7 +29,8 @@ export class EmailImportService {
     const tokenData = await getTokenFromFirestore(userId);
 
     if (!tokenData) {
-      throw new Error(
+      // user never connected or token was removed
+      throw new AuthError(
         "No se encontró un token de Gmail. Conéctate con Gmail nuevamente.",
       );
     }
@@ -50,7 +51,7 @@ export class EmailImportService {
     // Refresh expired token
     if (new Date().getTime() > tokenData.expiryDate) {
       if (!tokenData.refreshToken) {
-        throw new Error(
+        throw new AuthError(
           "El token de Gmail ha expirado y no hay refresh_token. Conéctate nuevamente.",
         );
       }
@@ -66,7 +67,8 @@ export class EmailImportService {
         });
       } catch (refreshError) {
         console.error("Error renovando token de Gmail:", refreshError);
-        throw new Error(
+        // refresh failed (invalid_grant, revoked, etc.) -> force re-login
+        throw new AuthError(
           "No se pudo renovar el token de Gmail. Conéctate nuevamente.",
         );
       }
