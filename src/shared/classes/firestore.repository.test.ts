@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+
 jest.mock('@/config/firebase', () => {
   const mockCollection = () => ({
     doc: (id?: string) => ({
