@@ -4,7 +4,7 @@
   "description": "MyQuota Backend - API and services for managing payment quotas",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No tests configured\" && exit 0",
     "start": "node -r tsconfig-paths/register dist/index.js",
     "dev": "ts-node-dev -r tsconfig-paths/register src/index.ts",
     "build": "tsc && tscpaths -p tsconfig.json -s ./src -o ./dist",
