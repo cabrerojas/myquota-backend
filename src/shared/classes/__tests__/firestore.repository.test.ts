@@ -4,19 +4,19 @@ import { FirestoreRepository } from "@shared/classes/firestore.repository";
 type Entity = { id: string; createdAt: Date | string | null; updatedAt: Date | string | null; deletedAt: Date | string | null; name?: string };
 
 const makeFakeCollection = () => {
-  const docs: Record<string, any> = {};
+  const docs: Record<string, unknown> = {};
   return {
     doc: (id?: string) => ({
       id: id || 'generated-id',
-      set: async (data: any) => { docs[id || 'generated-id'] = { ...data }; return; },
-      get: async () => ({ exists: !!docs[id], data: () => docs[id] }),
-      update: async (data: any) => { if (!docs[id]) throw new Error('not found'); docs[id] = { ...docs[id], ...data }; },
-      delete: async () => { delete docs[id]; },
+      set: async (data: unknown) => { (docs as Record<string, unknown>)[id || 'generated-id'] = { ...(data as Record<string, unknown>) }; return; },
+      get: async () => ({ exists: !!(docs as Record<string, unknown>)[id || 'generated-id'], data: () => (docs as Record<string, unknown>)[id || 'generated-id'] }),
+      update: async (data: unknown) => { if (!(docs as Record<string, unknown>)[id || 'generated-id']) throw new Error('not found'); (docs as Record<string, unknown>)[id || 'generated-id'] = { ...((docs as Record<string, unknown>)[id || 'generated-id'] as Record<string, unknown>), ...(data as Record<string, unknown>) }; },
+      delete: async () => { delete (docs as Record<string, unknown>)[id || 'generated-id']; },
     }),
-    where: () => ({ get: async () => ({ docs: Object.values(docs).map((d: any) => ({ data: () => d })) }) }),
-    collection: () => ({ doc: (subId: string) => ({ collection: () => ({ doc: (x:string) => ({ collection: () => ({ doc: () => ({}) }) }) }) }) }),
+    where: () => ({ get: async () => ({ docs: Object.values(docs).map((d) => ({ data: () => d })) }) }),
+    collection: () => ({ doc: (_subId: string) => ({ collection: () => ({ doc: (_x:string) => ({ collection: () => ({ doc: () => ({}) }) }) }) }) }),
     _internal: docs,
-  } as any;
+  };
 };
 
 // Mock db used in constructor
