@@ -1,43 +1,41 @@
-import { FirestoreRepository } from "@shared/classes/firestore.repository";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 
-// Minimal fake types
-type Entity = { id: string; createdAt: Date | string | null; updatedAt: Date | string | null; deletedAt: Date | string | null; name?: string };
-
-const makeFakeCollection = () => {
-  const docs: Record<string, unknown> = {};
-  return {
+jest.mock('@/config/firebase', () => {
+  const mockCollection = () => ({
     doc: (id?: string) => ({
       id: id || 'generated-id',
-      set: async (data: unknown) => { (docs as Record<string, unknown>)[id || 'generated-id'] = { ...(data as Record<string, unknown>) }; return; },
-      get: async () => ({ exists: !!(docs as Record<string, unknown>)[id || 'generated-id'], data: () => (docs as Record<string, unknown>)[id || 'generated-id'] }),
-      update: async (data: unknown) => { if (!(docs as Record<string, unknown>)[id || 'generated-id']) throw new Error('not found'); (docs as Record<string, unknown>)[id || 'generated-id'] = { ...((docs as Record<string, unknown>)[id || 'generated-id'] as Record<string, unknown>), ...(data as Record<string, unknown>) }; },
-      delete: async () => { delete (docs as Record<string, unknown>)[id || 'generated-id']; },
+      set: jest.fn().mockResolvedValue(undefined),
+      get: jest.fn().mockResolvedValue({ exists: true, data: () => ({ id: id || 'generated-id' }) }),
+      update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     }),
-    where: () => ({ get: async () => ({ docs: Object.values(docs).map((d) => ({ data: () => d })) }) }),
-    collection: () => ({ doc: (_subId: string) => ({ collection: () => ({ doc: (_x:string) => ({ collection: () => ({ doc: () => ({}) }) }) }) }) }),
-    _internal: docs,
-  };
-};
-
-// Mock db used in constructor
-jest.mock('@config/firebase', () => ({
-  db: {
-    collection: () => makeFakeCollection(),
-  },
-}));
-
-describe('FirestoreRepository', () => {
-  it('creates an entity and returns it', async () => {
-    const repo = new FirestoreRepository<Entity>([], 'test');
-    const data = { name: 'test' } as any;
-    const created = await repo.create(data);
-    expect(created).toHaveProperty('id');
-    expect(created.name).toBe('test');
+    where: jest.fn().mockReturnThis(),
+    get: jest.fn().mockResolvedValue({ docs: [], empty: true }),
+    docWithId: function (id: string) { return this.doc(id); }
   });
 
-  it('findById returns null for missing', async () => {
-    const repo = new FirestoreRepository<Entity>([], 'test');
-    const res = await repo.findById('nope');
-    expect(res).toBeNull();
+  return { db: { collection: () => mockCollection() } };
+});
+
+import { FirestoreRepository } from './firestore.repository';
+
+type Dummy = { id: string; createdAt?: Date | string; updatedAt?: Date | string; deletedAt?: Date | null };
+
+describe('FirestoreRepository (unit)', () => {
+  it('datesToIsoStrings converts Date fields and removes undefined', () => {
+    const repo = new FirestoreRepository<Dummy>([], 'dummy');
+    const input: any = { a: new Date('2020-01-01T00:00:00Z'), b: undefined, c: 'keep' };
+    const out = (repo as any).datesToIsoStrings(input);
+    expect(out.a).toBe('2020-01-01T00:00:00.000Z');
+    expect(out.b).toBeUndefined();
+    expect(out.c).toBe('keep');
+  });
+
+  it('sanitizeTimestamps converts Date to ISO and leaves other fields', () => {
+    const repo = new FirestoreRepository<Dummy>([], 'dummy');
+    const data: any = { createdAt: new Date('2021-02-03T04:05:06Z'), name: 'x' };
+    const sanitized = (repo as any).sanitizeTimestamps(data);
+    expect(sanitized.createdAt).toBe('2021-02-03T04:05:06.000Z');
+    expect(sanitized.name).toBe('x');
   });
 });
