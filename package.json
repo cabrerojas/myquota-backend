@@ -4,7 +4,7 @@
   "description": "MyQuota Backend - API and services for managing payment quotas",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"No tests configured\" && exit 0",
+    "test": "jest --runInBand --colors",
     "start": "node -r tsconfig-paths/register dist/index.js",
     "dev": "ts-node-dev -r tsconfig-paths/register src/index.ts",
     "build": "tsc && tscpaths -p tsconfig.json -s ./src -o ./dist",
@@ -30,14 +30,18 @@
     "@eslint/js": "^9.13.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
+    "@types/jest": "^29.5.3",
     "@types/node": "^22.8.1",
     "eslint": "^9.13.0",
     "globals": "^15.11.0",
+    "jest": "^29.6.1",
+    "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
     "tscpaths": "^0.0.9",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.12.2"
+    "typescript-eslint": "^8.12.2",
+    "jest-environment-node": "^29.6.1"
   }
 }
