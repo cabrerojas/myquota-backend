@@ -68,6 +68,29 @@ const createStatsRouter = (): Router => {
     },
   );
 
+  // POST /stats/what-if (global per-user endpoint)
+  router.post(
+    "/stats/what-if",
+    authenticate,
+    (req: Request, res: Response) => {
+      // create a lightweight controller here for global endpoint
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(400).json({ message: "Falta userId." });
+        return;
+      }
+      const controller = new (class {
+        async handler(r: Request, s: Response) {
+          // reuse StatsController.whatIf by instantiating a dummy StatsController
+          const StatsControllerClass = require("./stats.controller").StatsController;
+          const c = new StatsControllerClass(null);
+          return c.whatIf(r, s);
+        }
+      })();
+      return controller.handler(req, res);
+    },
+  );
+
   return router;
 };
 
