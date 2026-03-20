@@ -17,7 +17,7 @@ jest.mock('@/config/firebase', () => {
   return { db: { collection: () => mockCollection() } };
 });
 
-import { FirestoreRepository } from './firestore.repository';
+import { FirestoreRepository } from '../firestore.repository';
 
 type Dummy = { id: string; createdAt?: Date | string; updatedAt?: Date | string; deletedAt?: Date | null };
 
