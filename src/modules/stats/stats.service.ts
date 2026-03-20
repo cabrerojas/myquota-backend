@@ -9,6 +9,8 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
+import { DebtForecastService, TransactionWithQuotas } from "@/modules/quota/debtForecast.service";
+import { Quota } from "@/modules/quota/quota.model";
 
 /**
  * Maximum age of a Firestore-persisted summary before forcing a full recompute.
@@ -610,5 +612,49 @@ export class StatsService {
           console.error("[invalidate] monthlyStats stale mark failed:", err),
         );
     }
+  }
+}
+
+// What-if calculation: map products -> temporary transactions -> call DebtForecastService
+import { WhatIfProduct } from "./stats.schemas";
+
+export class WhatIfService {
+  constructor(private readonly userId: string) {}
+
+  async calculateWhatIf(products: WhatIfProduct[]) {
+    // Map products to temporary transactions with quotas
+    // Each product produces `totalInstallments` quotas starting at firstDueDate
+    const nowBase = Date.now();
+    const transactionsOverride: TransactionWithQuotas[] = products.map((p, idx) => {
+      const txId = `temp-tx-${nowBase}-${idx}`;
+      const quotas: Quota[] = [];
+      const first = new Date(p.firstDueDate);
+      for (let i = 0; i < p.totalInstallments; i++) {
+        const due = new Date(first.getFullYear(), first.getMonth() + i, first.getDate());
+        quotas.push({
+          id: `${txId}-q-${i + 1}`,
+          dueDate: due,
+          amount: +(p.amount / p.totalInstallments),
+          currency: p.currency,
+          status: "pending",
+          transactionId: txId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        });
+      }
+      return {
+        id: txId,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        creditCardId: p.creditCardId ?? "",
+        quotas,
+      };
+    });
+
+    const dfs = new DebtForecastService(this.userId);
+    const projection = await dfs.getDebtForecast(transactionsOverride);
+    return projection;
   }
 }
