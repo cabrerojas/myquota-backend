@@ -9,8 +9,7 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
-import { DebtForecastService, TransactionWithQuotas } from "@/modules/quota/debtForecast.service";
-import { Quota } from "@/modules/quota/quota.model";
+import { computeDebtForecast } from "@/modules/quota/debtForecast.service";
 
 /**
  * Maximum age of a Firestore-persisted summary before forcing a full recompute.
@@ -615,46 +614,46 @@ export class StatsService {
   }
 }
 
-// What-if calculation: map products -> temporary transactions -> call DebtForecastService
+// What-if calculation: map products -> temporary transactions -> compute projection
 import { WhatIfProduct } from "./stats.schemas";
 
 export class WhatIfService {
-  constructor(private readonly userId: string) {}
-
   async calculateWhatIf(products: WhatIfProduct[]) {
     // Map products to temporary transactions with quotas
     // Each product produces `totalInstallments` quotas starting at firstDueDate
     const nowBase = Date.now();
-    const transactionsOverride: TransactionWithQuotas[] = products.map((p, idx) => {
-      const txId = `temp-tx-${nowBase}-${idx}`;
-      const quotas: Quota[] = [];
+    const allQuotas = products.flatMap((p, pIdx) => {
+      const txId = `temp-tx-${nowBase}-${pIdx}`;
       const first = new Date(p.firstDueDate);
-      for (let i = 0; i < p.totalInstallments; i++) {
+      return Array.from({ length: p.totalInstallments }, (_, i) => {
         const due = new Date(first.getFullYear(), first.getMonth() + i, first.getDate());
-        quotas.push({
+        return {
           id: `${txId}-q-${i + 1}`,
-          dueDate: due,
+          merchant: p.merchant,
           amount: +(p.amount / p.totalInstallments),
           currency: p.currency,
-          status: "pending",
+          status: "pending" as const,
+          dueDate: due,
           transactionId: txId,
+          creditCardId: p.creditCardId ?? "",
+          quotaNumber: i + 1,
+          totalQuotas: p.totalInstallments,
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
-        });
-      }
-      return {
-        id: txId,
-        merchant: p.merchant,
-        amount: p.amount,
-        currency: p.currency,
-        creditCardId: p.creditCardId ?? "",
-        quotas,
-      };
+        };
+      });
     });
 
-    const dfs = new DebtForecastService(this.userId);
-    const projection = await dfs.getDebtForecast(transactionsOverride);
-    return projection;
+    // Use the pure compute function to avoid Firestore queries
+    const result = computeDebtForecast(allQuotas, []);
+    return {
+      months: result.months,
+      totalDebtCLP: result.totalDebtCLP,
+      totalDebtUSD: result.totalDebtUSD,
+      meta: {
+        months: result.months.length,
+      },
+    };
   }
 }

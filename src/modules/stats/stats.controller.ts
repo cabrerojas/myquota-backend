@@ -45,7 +45,7 @@ export class StatsController {
         return;
       }
 
-      const service = new WhatIfService(userId);
+      const service = new WhatIfService();
       const projection = await service.calculateWhatIf(products);
       res.status(200).json({ projection, meta: { months: projection.months.length } });
     } catch (error) {
