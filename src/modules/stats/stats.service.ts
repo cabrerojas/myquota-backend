@@ -612,3 +612,60 @@ export class StatsService {
     }
   }
 }
+
+// What-if calculation: map products -> temporary transactions -> call DebtForecastService
+import { WhatIfProduct } from "./stats.schemas";
+import { DebtForecastService } from "@/modules/quota/debtForecast.service";
+
+// Extended Transaction type for what-if simulations
+interface TransactionWithQuotas {
+  id: string;
+  merchant: string;
+  amount: number;
+  currency: string;
+  creditCardId: string;
+  quotas: Array<{
+    id: string;
+    dueDate: string;
+    amount: number;
+    currency: string;
+    status: string;
+  }>;
+}
+
+export class WhatIfService {
+  constructor(private readonly userId: string) {}
+
+  async calculateWhatIf(products: WhatIfProduct[]) {
+    // Map products to temporary transactions with quotas
+    // Each product produces `totalInstallments` quotas starting at firstDueDate
+    const nowBase = Date.now();
+    const transactionsOverride: TransactionWithQuotas[] = products.map((p, idx) => {
+      const txId = `temp-tx-${nowBase}-${idx}`;
+      const quotas: TransactionWithQuotas["quotas"] = [];
+      const first = new Date(p.firstDueDate);
+      for (let i = 0; i < p.totalInstallments; i++) {
+        const due = new Date(first.getFullYear(), first.getMonth() + i, first.getDate());
+        quotas.push({
+          id: `${txId}-q-${i + 1}`,
+          dueDate: due.toISOString(),
+          amount: +(p.amount / p.totalInstallments),
+          currency: p.currency,
+          status: "pending",
+        });
+      }
+      return {
+        id: txId,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        creditCardId: p.creditCardId ?? "",
+        quotas,
+      };
+    });
+
+    const dfs = new DebtForecastService(this.userId);
+    const projection = await dfs.getDebtForecast(transactionsOverride);
+    return projection;
+  }
+}
