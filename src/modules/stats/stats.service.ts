@@ -9,6 +9,8 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
+import { DebtForecastService, TransactionWithQuotas } from "@/modules/quota/debtForecast.service";
+import { Quota } from "@/modules/quota/quota.model";
 
 /**
  * Maximum age of a Firestore-persisted summary before forcing a full recompute.
@@ -615,23 +617,6 @@ export class StatsService {
 
 // What-if calculation: map products -> temporary transactions -> call DebtForecastService
 import { WhatIfProduct } from "./stats.schemas";
-import { DebtForecastService } from "@/modules/quota/debtForecast.service";
-
-// Extended Transaction type for what-if simulations
-interface TransactionWithQuotas {
-  id: string;
-  merchant: string;
-  amount: number;
-  currency: string;
-  creditCardId: string;
-  quotas: Array<{
-    id: string;
-    dueDate: string;
-    amount: number;
-    currency: string;
-    status: string;
-  }>;
-}
 
 export class WhatIfService {
   constructor(private readonly userId: string) {}
@@ -642,16 +627,20 @@ export class WhatIfService {
     const nowBase = Date.now();
     const transactionsOverride: TransactionWithQuotas[] = products.map((p, idx) => {
       const txId = `temp-tx-${nowBase}-${idx}`;
-      const quotas: TransactionWithQuotas["quotas"] = [];
+      const quotas: Quota[] = [];
       const first = new Date(p.firstDueDate);
       for (let i = 0; i < p.totalInstallments; i++) {
         const due = new Date(first.getFullYear(), first.getMonth() + i, first.getDate());
         quotas.push({
           id: `${txId}-q-${i + 1}`,
-          dueDate: due.toISOString(),
+          dueDate: due,
           amount: +(p.amount / p.totalInstallments),
           currency: p.currency,
           status: "pending",
+          transactionId: txId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
         });
       }
       return {

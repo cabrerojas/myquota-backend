@@ -5,7 +5,18 @@ import { BillingPeriod } from "@modules/billingPeriod/billingPeriod.model";
 import { Quota } from "./quota.model";
 import { CacheService } from "@shared/services/cache.service";
 
-interface MonthBucket {
+// Extended Transaction type for what-if simulations - exported for use in stats module
+export interface TransactionWithQuotas {
+  id: string;
+  merchant: string;
+  amount: number;
+  currency: string;
+  creditCardId: string;
+  quotas: Quota[];
+}
+
+// MonthBucket interface - exported for use in stats module
+export interface MonthBucket {
   key: string;
   label: string;
   totalCLP: number;
@@ -35,7 +46,6 @@ export class DebtForecastService {
     return new Date(year, month - 1, 1).getTime();
   }
 
-  // Extended Transaction type for what-if simulations
   public async getDebtForecast(
     transactionsOverride?: TransactionWithQuotas[],
   ): Promise<{
@@ -58,28 +68,20 @@ export class DebtForecastService {
     // --- BATCH FETCH ---
     // If transactionsOverride is provided, use its quotas instead of reading
     // quotas from Firestore. transactionsOverride is expected to be an array
-    // of Transaction-like objects that MAY include a `quotas` array with
-    // quota objects. This enables temporary, in-memory simulations.
+    // of TransactionWithQuotas objects. This enables temporary, in-memory simulations.
     let allQuotas: (Quota & { transactionId: string; creditCardId: string })[] = [];
     const txMap = new Map<string, Transaction>();
-
-    // Temporary type for transaction overrides with quotas
-    interface TransactionWithQuotas extends Transaction {
-      quotas?: Quota[];
-      creditCardId?: string;
-    }
 
     if (transactionsOverride && transactionsOverride.length) {
       // Build allQuotas and txMap from the override
       for (const tx of transactionsOverride) {
-        const txWithQuotas = tx as TransactionWithQuotas;
-        txMap.set(tx.id, tx);
-        const quotasFromTx = txWithQuotas.quotas ?? [];
+        txMap.set(tx.id, tx as unknown as Transaction);
+        const quotasFromTx = tx.quotas ?? [];
         for (const q of quotasFromTx) {
           allQuotas.push({
             ...q,
             transactionId: tx.id,
-            creditCardId: txWithQuotas.creditCardId || "",
+            creditCardId: tx.creditCardId || "",
           });
         }
       }
@@ -345,13 +347,13 @@ export function computeDebtForecast(
     else bucket.totalCLP += q.amount;
     bucket.count += 1;
     bucket.details.push({
-      merchant: q.merchant,
+      merchant: q.merchant || "Sin comercio",
       amount: q.amount,
       currency: q.currency,
       quotaNumber: q.quotaNumber!,
       totalQuotas: q.totalQuotas!,
       transactionId: q.transactionId,
-      creditCardId: q.creditCardId,
+      creditCardId: q.creditCardId || "",
     });
   }
 
