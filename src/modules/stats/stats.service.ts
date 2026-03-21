@@ -9,7 +9,6 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
-import { computeDebtForecast } from "@/modules/quota/debtForecast.service";
 
 /**
  * Maximum age of a Firestore-persisted summary before forcing a full recompute.
@@ -617,48 +616,91 @@ export class StatsService {
 // What-if calculation: map products -> temporary transactions -> compute projection
 import { WhatIfProduct } from "./stats.schemas";
 
+interface QuotaInput {
+  merchant: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+}
+
 export class WhatIfService {
   async calculateWhatIf(products: WhatIfProduct[]) {
-    // Map products to temporary transactions with quotas
-    // Each product produces `totalInstallments` quotas starting at firstDueDate
-    const nowBase = Date.now();
-    const baseDate = new Date();
+    // Find max installments to limit projection
+    const maxInstallments = Math.max(...products.map((p) => p.totalInstallments), 0);
 
-    const allQuotas = products.flatMap((p, pIdx) => {
-      const txId = `temp-tx-${nowBase}-${pIdx}`;
+    // Build quotas with string dates only
+    const allQuotas: QuotaInput[] = [];
+
+    for (const p of products) {
       const first = new Date(p.firstDueDate);
-      const firstYear = first.getFullYear();
-      const firstMonth = first.getMonth();
-      const firstDay = first.getDate();
+      const firstYear = first.getUTCFullYear();
+      const firstMonth = first.getUTCMonth();
+      const firstDay = first.getUTCDate();
 
-      return Array.from({ length: p.totalInstallments }, (_, i) => {
-        const due = new Date(firstYear, firstMonth + i, firstDay);
-        return {
-          id: `${txId}-q-${i + 1}`,
+      for (let i = 0; i < p.totalInstallments; i++) {
+        const due = new Date(Date.UTC(firstYear, firstMonth + i, firstDay));
+        allQuotas.push({
           merchant: p.merchant,
           amount: +(p.amount / p.totalInstallments),
           currency: p.currency,
-          status: "pending" as const,
-          dueDate: due,
-          transactionId: txId,
-          creditCardId: p.creditCardId ?? "",
-          quotaNumber: i + 1,
-          totalQuotas: p.totalInstallments,
-          createdAt: baseDate,
-          updatedAt: baseDate,
-          deletedAt: null,
-        };
-      });
-    });
+          dueDate: due.toISOString(),
+        });
+      }
+    }
 
-    // Use the pure compute function to avoid Firestore queries
-    const result = computeDebtForecast(allQuotas, []);
+    // Simple projection: group by month key
+    const bucketMap = new Map<
+      string,
+      { key: string; label: string; totalCLP: number; totalUSD: number; count: number }
+    >();
+
+    for (const q of allQuotas) {
+      const date = new Date(q.dueDate);
+      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+      const monthLabel = date.toLocaleDateString("es-CL", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+      const label = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+      if (!bucketMap.has(key)) {
+        bucketMap.set(key, { key, label, totalCLP: 0, totalUSD: 0, count: 0 });
+      }
+
+      const bucket = bucketMap.get(key)!;
+      if (q.currency === "USD") {
+        bucket.totalUSD += q.amount;
+      } else {
+        bucket.totalCLP += q.amount;
+      }
+      bucket.count += 1;
+    }
+
+    // Sort buckets chronologically and limit to max installments
+    const sortedMonths = Array.from(bucketMap.values()).sort((a, b) => a.key.localeCompare(b.key));
+
+    // Limit to the maximum number of months we need to show
+    const limitedMonths = sortedMonths.slice(0, maxInstallments);
+
+    // Calculate totals
+    let totalDebtCLP = 0;
+    let totalDebtUSD = 0;
+    for (const m of limitedMonths) {
+      totalDebtCLP += m.totalCLP;
+      totalDebtUSD += m.totalUSD;
+    }
+
     return {
-      months: result.months,
-      totalDebtCLP: result.totalDebtCLP,
-      totalDebtUSD: result.totalDebtUSD,
+      months: limitedMonths.map((m) => ({
+        ...m,
+        details: [],
+        periodsByCard: [],
+      })),
+      totalDebtCLP,
+      totalDebtUSD,
       meta: {
-        months: result.months.length,
+        months: limitedMonths.length,
       },
     };
   }
