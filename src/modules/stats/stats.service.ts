@@ -622,11 +622,17 @@ export class WhatIfService {
     // Map products to temporary transactions with quotas
     // Each product produces `totalInstallments` quotas starting at firstDueDate
     const nowBase = Date.now();
+    const baseDate = new Date();
+
     const allQuotas = products.flatMap((p, pIdx) => {
       const txId = `temp-tx-${nowBase}-${pIdx}`;
       const first = new Date(p.firstDueDate);
+      const firstYear = first.getFullYear();
+      const firstMonth = first.getMonth();
+      const firstDay = first.getDate();
+
       return Array.from({ length: p.totalInstallments }, (_, i) => {
-        const due = new Date(first.getFullYear(), first.getMonth() + i, first.getDate());
+        const due = new Date(firstYear, firstMonth + i, firstDay);
         return {
           id: `${txId}-q-${i + 1}`,
           merchant: p.merchant,
@@ -638,8 +644,8 @@ export class WhatIfService {
           creditCardId: p.creditCardId ?? "",
           quotaNumber: i + 1,
           totalQuotas: p.totalInstallments,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: baseDate,
+          updatedAt: baseDate,
           deletedAt: null,
         };
       });
