@@ -6,7 +6,7 @@ import { BaseService } from "@/shared/classes/base.service";
 import { Quota } from "@/modules/quota/quota.model";
 import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
 import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
-import { EmailImportService } from "./emailImport.service";
+import { CategoryMatcher, EmailImportService } from "./emailImport.service";
 import { ManualTransactionService } from "./manualTransaction.service";
 
 export class TransactionService extends BaseService<Transaction> {
@@ -14,18 +14,21 @@ export class TransactionService extends BaseService<Transaction> {
   private billingPeriodRepository: BillingPeriodRepository;
   private creditCardRepository: CreditCardRepository;
   private emailImportService: EmailImportService;
+  private categoryMatcher: CategoryMatcher;
   private manualTransactionService: ManualTransactionService;
 
   constructor(
     repository: TransactionRepository,
     billingPeriodRepository: BillingPeriodRepository,
     creditCardRepository: CreditCardRepository,
+    categoryMatcher: CategoryMatcher,
   ) {
     super(repository);
     this.repository = repository;
     this.billingPeriodRepository = billingPeriodRepository;
     this.creditCardRepository = creditCardRepository;
     this.emailImportService = new EmailImportService();
+    this.categoryMatcher = categoryMatcher;
     this.manualTransactionService = new ManualTransactionService(repository);
   }
 
@@ -33,6 +36,7 @@ export class TransactionService extends BaseService<Transaction> {
     return this.emailImportService.fetchBankEmails(
       userId,
       this.creditCardRepository,
+      this.categoryMatcher,
     );
   }
 

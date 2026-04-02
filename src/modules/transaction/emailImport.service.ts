@@ -1,5 +1,6 @@
 import { Auth, gmail_v1, google } from "googleapis";
-import { getTokenFromFirestore } from "@config/gmailAuth";
+import { createHash } from "crypto";
+import { getTokenFromFirestore, saveTokenToFirestore } from "@config/gmailAuth";
 import * as cheerio from "cheerio";
 import { chunkArray } from "@/shared/utils/array.utils";
 import { parseFirebaseDate } from "@/shared/utils/date.utils";
@@ -7,29 +8,21 @@ import { getEnv } from "@config/env.validation";
 
 import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
 import { Transaction } from "./transaction.model";
-import { CategoryService } from "@/modules/category/category.service";
 import { AuthError } from "@shared/errors/custom.error";
-/**
- * Handles Gmail integration and bank-email parsing.
- *
- * Extracted from TransactionService to isolate external-API and HTML-parsing
- * concerns. This service is stateless; all dependencies are passed explicitly.
- */
+
+type MerchantCategoryMap = Map<string, { categoryId: string; categoryName: string }>;
+export type CategoryMatcher = {
+  buildMerchantCategoryMapAsync: () => Promise<MerchantCategoryMap>;
+};
 export class EmailImportService {
-  /**
-   * Fetches new bank-notification emails from the user's Gmail inbox,
-   * parses transaction data from the HTML body, and persists new records.
-   *
-   * @returns The number of newly imported transactions.
-   */
   async fetchBankEmails(
     userId: string,
     creditCardRepository: CreditCardRepository,
+    categoryService: CategoryMatcher,
   ): Promise<{ importedCount: number }> {
     const tokenData = await getTokenFromFirestore(userId);
 
     if (!tokenData) {
-      // user never connected or token was removed
       throw new AuthError(
         "No se encontró un token de Gmail. Conéctate con Gmail nuevamente.",
       );
@@ -38,17 +31,16 @@ export class EmailImportService {
     const env = getEnv();
     const clientId = env.GOOGLE_CLIENT_ID;
     const clientSecret = env.GOOGLE_CLIENT_SECRET;
-    const auth: Auth.OAuth2Client = new google.auth.OAuth2(
+    const oauthClient: Auth.OAuth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
     );
-    auth.setCredentials({
+    oauthClient.setCredentials({
       access_token: tokenData.accessToken,
       refresh_token: tokenData.refreshToken,
       expiry_date: tokenData.expiryDate,
     });
 
-    // Refresh expired token
     if (new Date().getTime() > tokenData.expiryDate) {
       if (!tokenData.refreshToken) {
         throw new AuthError(
@@ -56,25 +48,28 @@ export class EmailImportService {
         );
       }
       try {
-        const { credentials } = await auth.refreshAccessToken();
-        auth.setCredentials(credentials);
+        const { credentials } = await oauthClient.refreshAccessToken();
+        oauthClient.setCredentials(credentials);
 
-        const { saveTokenToFirestore } = await import("@config/gmailAuth");
         await saveTokenToFirestore(userId, {
           access_token: credentials.access_token,
           refresh_token: credentials.refresh_token || tokenData.refreshToken,
           expiry_date: credentials.expiry_date,
         });
       } catch (refreshError) {
-        console.error("Error renovando token de Gmail:", refreshError);
-        // refresh failed (invalid_grant, revoked, etc.) -> force re-login
+        console.error(
+          "Error renovando token de Gmail:",
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Error desconocido",
+        );
         throw new AuthError(
           "No se pudo renovar el token de Gmail. Conéctate nuevamente.",
         );
       }
     }
 
-    const gmail = google.gmail({ version: "v1", auth });
+    const gmail = google.gmail({ version: "v1", auth: oauthClient });
 
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -92,44 +87,38 @@ export class EmailImportService {
     }
 
     const messageIds = res.data.messages.map((message) => message.id!);
-    const existingIds = await this.getExistingTransactionIds(
-      creditCardRepository,
-      messageIds,
-    );
-    const newMessageIds = messageIds.filter((id) => !existingIds.includes(id));
-
-    if (newMessageIds.length === 0) {
-      return { importedCount: 0 };
-    }
-
-    const chunks = chunkArray(newMessageIds, 100);
-    let batchData: Transaction[] = [];
+    const chunks = chunkArray(messageIds, 100);
     let totalImported = 0;
 
-    // Pre-load merchant→category map once for all emails
-    const categoryService = new CategoryService();
-    let merchantMap: Map<string, { categoryId: string; categoryName: string }>;
+    let merchantMap: MerchantCategoryMap;
     try {
-      merchantMap = await categoryService.buildMerchantCategoryMap();
+      merchantMap = await categoryService.buildMerchantCategoryMapAsync();
     } catch (err) {
-      console.error("Error pre-cargando merchant map:", err);
+      console.error(
+        "Error pre-cargando merchant map:",
+        err instanceof Error ? err.message : "Error desconocido",
+      );
       merchantMap = new Map();
     }
 
     for (const chunk of chunks) {
-      await Promise.all(
-        chunk.map(async (messageId) => {
-          const email = await gmail.users.messages.get({
-            userId: "me",
-            id: messageId,
-          });
-          let encodedMessage = email.data.payload?.body?.data;
+      const batchData = (
+        await Promise.all(
+          chunk.map(async (messageId) => {
+            const email = await gmail.users.messages.get({
+              userId: "me",
+              id: messageId,
+            });
+            let encodedMessage = email.data.payload?.body?.data;
 
-          if (email.data.payload) {
-            encodedMessage = this.findHtmlOrPlainText(email.data.payload);
-          }
+            if (email.data.payload) {
+              encodedMessage = this.findHtmlOrPlainText(email.data.payload);
+            }
 
-          if (encodedMessage) {
+            if (!encodedMessage) {
+              return null;
+            }
+
             const content = Buffer.from(encodedMessage, "base64").toString(
               "utf8",
             );
@@ -141,99 +130,128 @@ export class EmailImportService {
               transactionDate,
             } = this.extractTransactionDataFromHtml(content);
 
-            if (amount && cardLastDigits && merchant && transactionDate) {
-              const transactionData: Transaction = {
-                id: messageId,
+            if (!(amount && cardLastDigits && merchant && transactionDate)) {
+              return null;
+            }
+
+            const transactionData: Transaction = {
+              id: this.buildDeterministicTransactionId({
                 amount,
                 currency,
-                cardType: "Tarjeta de Crédito",
                 cardLastDigits,
                 merchant,
-                categoryId: undefined,
                 transactionDate,
                 bank: "Banco de Chile",
-                email: "enviodigital@bancochile.cl",
-                creditCardId: "",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                deletedAt: null,
-              };
+              }),
+              amount,
+              currency,
+              cardType: "Tarjeta de Crédito",
+              cardLastDigits,
+              merchant,
+              categoryId: undefined,
+              transactionDate,
+              bank: "Banco de Chile",
+              email: "enviodigital@bancochile.cl",
+              creditCardId: "",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              deletedAt: null,
+              source: "email",
+            };
 
-              const match = CategoryService.matchMerchantInMap(
-                merchant,
-                merchantMap,
-              );
-              if (match) {
-                transactionData.categoryId = match.categoryId;
-              }
-
-              batchData.push(transactionData);
+            const match = this.matchMerchantInMap(merchant, merchantMap);
+            if (match) {
+              transactionData.categoryId = match.categoryId;
             }
-          }
-        }),
-      );
+
+            return transactionData;
+          }),
+        )
+      ).filter((transaction): transaction is Transaction => !!transaction);
 
       if (batchData.length > 0) {
-        totalImported += batchData.length;
-        await this.saveBatch(creditCardRepository, batchData);
-        batchData = [];
+        totalImported += await this.saveBatch(creditCardRepository, batchData);
       }
     }
 
     return { importedCount: totalImported };
   }
 
-  /**
-   * Checks which transaction IDs already exist across all credit cards.
-   */
-  private async getExistingTransactionIds(
-    creditCardRepository: CreditCardRepository,
-    ids: string[],
-  ): Promise<string[]> {
-    const creditCards = await creditCardRepository.findAll();
-    const chunks = chunkArray(ids, 10);
-    const results = await Promise.all(
-      chunks.map(async (chunk) => {
-        const matched: string[] = [];
-        for (const creditCard of creditCards) {
-          const txCollection = creditCardRepository.getTransactionsCollection(
-            creditCard.id,
-          );
-          const snapshot = await txCollection
-            .where("id", "in", chunk)
-            .where("deletedAt", "==", null)
-            .get();
-          matched.push(...snapshot.docs.map((doc) => doc.id));
-        }
-        return matched;
-      }),
-    );
-    return results.flat();
+  private buildDeterministicTransactionId(params: {
+    amount: number;
+    currency: string;
+    cardLastDigits: string;
+    merchant: string;
+    transactionDate: Date;
+    bank: string;
+  }): string {
+    const normalizedMerchant = params.merchant
+      .normalize("NFKD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toUpperCase();
+
+    const amountCents = Math.round(params.amount * 100);
+    const identity = [
+      params.bank.toUpperCase(),
+      params.cardLastDigits,
+      params.currency.toUpperCase(),
+      amountCents.toString(),
+      normalizedMerchant,
+      params.transactionDate.toISOString(),
+    ].join("|");
+
+    return createHash("sha256").update(identity).digest("hex").slice(0, 32);
   }
 
-  /**
-   * Saves a batch of transactions, matching each to its credit card by cardLastDigits.
-   */
   private async saveBatch(
     creditCardRepository: CreditCardRepository,
     transactions: Transaction[],
-  ): Promise<void> {
-    await Promise.all(
+  ): Promise<number> {
+    const creditCards = await creditCardRepository.findAll();
+    const byLastDigits = new Map<string, string[]>();
+
+    for (const card of creditCards) {
+      const existing = byLastDigits.get(card.cardLastDigits) ?? [];
+      existing.push(card.id);
+      byLastDigits.set(card.cardLastDigits, existing);
+    }
+
+    const createdFlags = await Promise.all(
       transactions.map(async (transaction) => {
-        const creditCard = await creditCardRepository.findOne({
-          cardLastDigits: transaction.cardLastDigits,
-        });
-        if (creditCard) {
-          transaction.creditCardId = creditCard.id;
-          await creditCardRepository.addTransaction(creditCard.id, transaction);
+        const matchingCards = byLastDigits.get(transaction.cardLastDigits) ?? [];
+
+        if (!matchingCards.length) {
+          return false;
         }
+
+        const matchedCreditCardId = [...matchingCards].sort()[0];
+        transaction.creditCardId = matchedCreditCardId;
+
+        return creditCardRepository.addTransactionIfAbsent(
+          matchedCreditCardId,
+          transaction,
+        );
       }),
     );
+
+    return createdFlags.filter(Boolean).length;
   }
 
-  /**
-   * Recursively searches a MIME message tree for the HTML (or plain-text) body.
-   */
+  private matchMerchantInMap(
+    merchantName: string,
+    map: MerchantCategoryMap,
+  ): { categoryId: string; categoryName: string } | null {
+    for (const [pattern, cat] of map) {
+      if (merchantName.toUpperCase().includes(pattern)) {
+        return cat;
+      }
+    }
+
+    return null;
+  }
+
   private findHtmlOrPlainText(
     part: gmail_v1.Schema$MessagePart,
   ): string | null | undefined {
@@ -252,16 +270,11 @@ export class EmailImportService {
     return undefined;
   }
 
-  /**
-   * Parses the HTML content of a Banco de Chile purchase notification
-   * and extracts structured transaction data.
-   */
   private extractTransactionDataFromHtml(htmlContent: string) {
     const $ = cheerio.load(htmlContent);
 
     const textContent = $('td:contains("compra por")').text();
 
-    // Detect currency and amount
     const amountMatch = textContent.match(
       /(?:US\$|CLP\$|\$)(\d{1,64}(?:[.,]\d{3})*(?:[.,]\d{2})?)/,
     );

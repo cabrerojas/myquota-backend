@@ -7,12 +7,10 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
     super(["users", userId], "creditCards");
   }
 
-  // Obtener la referencia a la subcolección de transacciones
   getTransactionsCollection(creditCardId: string) {
     return this.repository.doc(creditCardId).collection("transactions");
   }
 
-  // Agregar una transacción a la subcolección
   async addTransaction(
     creditCardId: string,
     transaction: Transaction,
@@ -22,7 +20,42 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
       .doc(transaction.id)
       .set(this.datesToIsoStrings(transaction), { merge: true });
   }
-  // Obtener todas las transacciones de la subcolección
+
+  async addTransactionIfAbsent(
+    creditCardId: string,
+    transaction: Transaction,
+  ): Promise<boolean> {
+    const transactionsCollection = this.getTransactionsCollection(creditCardId);
+
+    try {
+      await transactionsCollection
+        .doc(transaction.id)
+        .create(this.datesToIsoStrings(transaction));
+      return true;
+    } catch (error: unknown) {
+      if (this.isAlreadyExistsError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private isAlreadyExistsError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const firestoreError = error as { code?: string | number; details?: string };
+    const details = firestoreError.details ?? "";
+    const message = error.message;
+
+    return (
+      firestoreError.code === 6 ||
+      firestoreError.code === "already-exists" ||
+      message.includes("ALREADY_EXISTS") ||
+      details.includes("ALREADY_EXISTS")
+    );
+  }
   async getTransactions(creditCardId: string): Promise<Transaction[]> {
     const transactionsCollection = this.getTransactionsCollection(creditCardId);
 
@@ -32,7 +65,6 @@ export class CreditCardRepository extends FirestoreRepository<CreditCard> {
 
     return snapshot.docs.map((doc) => doc.data() as Transaction);
   }
-  // Obtener el ID de la tarjeta de crédito a partir del ID de la transacción
   async getCreditCardIdByTransactionId(
     transactionId: string,
   ): Promise<string | null> {
