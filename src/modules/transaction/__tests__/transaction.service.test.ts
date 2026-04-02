@@ -1,6 +1,7 @@
 import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
 import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 import { TransactionService } from "@/modules/transaction/transaction.service";
+import { CategoryMatcher } from "@/modules/transaction/emailImport.service";
 import { Transaction } from "@/modules/transaction/transaction.model";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 
@@ -44,12 +45,19 @@ const buildTransaction = (id: string): Transaction => ({
 });
 
 describe("TransactionService.initializeQuotasForAllTransactions", () => {
+  const categoryMatcherStub: CategoryMatcher = {
+    async buildMerchantCategoryMapAsync() {
+      return new Map();
+    },
+  };
+
   it("is idempotent under retries", async () => {
     const repository = new InMemoryTransactionRepository();
     const service = new TransactionService(
       repository as unknown as TransactionRepository,
       {} as BillingPeriodRepository,
       {} as CreditCardRepository,
+      categoryMatcherStub,
     );
 
     const transactions = [buildTransaction("tx-1"), buildTransaction("tx-2")];
@@ -74,6 +82,7 @@ describe("TransactionService.initializeQuotasForAllTransactions", () => {
       repository as unknown as TransactionRepository,
       {} as BillingPeriodRepository,
       {} as CreditCardRepository,
+      categoryMatcherStub,
     );
 
     const transactions = [

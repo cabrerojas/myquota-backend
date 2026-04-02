@@ -5,6 +5,7 @@ import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
 import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
+import { CategoryService } from "@/modules/category/category.service";
 import { validate } from "@shared/middlewares/validate.middleware";
 import {
   createTransactionSchema,
@@ -40,10 +41,16 @@ const createTransactionRouter = (): Router => {
           creditCardId,
         );
         const creditCardRepository = new CreditCardRepository(userId);
+        const categoryService = new CategoryService();
+        const categoryMatcher = {
+          buildMerchantCategoryMapAsync: async () =>
+            categoryService.buildMerchantCategoryMap(),
+        };
         const service = new TransactionService(
           transactionRepository,
           billingPeriodRepository,
           creditCardRepository,
+          categoryMatcher,
         );
         const controller = new TransactionController(service);
 
