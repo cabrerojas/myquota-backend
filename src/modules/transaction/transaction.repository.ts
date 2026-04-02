@@ -35,6 +35,47 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
       .set(this.datesToIsoStrings(quota) as Quota);
   }
 
+  async addQuotaIfAbsent(
+    creditCardId: string,
+    transactionId: string,
+    quota: Quota,
+  ): Promise<boolean> {
+    const quotasCollection = this.getQuotasCollection(
+      creditCardId,
+      transactionId,
+    );
+
+    try {
+      await quotasCollection
+        .doc(quota.id)
+        .create(this.datesToIsoStrings(quota) as Quota);
+      return true;
+    } catch (error: unknown) {
+      if (this.isAlreadyExistsError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private isAlreadyExistsError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const maybeCode = (
+      error as { code?: string | number; details?: string }
+    ).code;
+
+    return (
+      maybeCode === 6 ||
+      maybeCode === "already-exists" ||
+      error.message.includes("ALREADY_EXISTS") ||
+      ((error as { details?: string }).details?.includes("ALREADY_EXISTS") ??
+        false)
+    );
+  }
+
   // Obtener todas las cuotas de la subcolección
   async getQuotas(
     creditCardId: string,
