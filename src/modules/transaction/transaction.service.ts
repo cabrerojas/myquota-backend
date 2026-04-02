@@ -278,41 +278,31 @@ export class TransactionService extends BaseService<Transaction> {
 
     if (!transactions.length) return 0;
 
-    // Obtener las cuotas existentes para estas transacciones (N lecturas paralelas)
-    const existingQuotas = await Promise.all(
-      transactions.map((transaction) =>
-        this.repository.getQuotas(creditCardId, transaction.id),
-      ),
-    );
-
-    const existingQuotaIds = new Set(
-      existingQuotas.flat().map((quota) => quota.transactionId),
-    );
-
-    const transactionsWithoutQuotas = transactions.filter(
-      (transaction) => !existingQuotaIds.has(transaction.id),
-    );
-
-    if (!transactionsWithoutQuotas.length) return 0;
-
-    // Crear cuotas en paralelo
-    await Promise.all(
-      transactionsWithoutQuotas.map(async (transaction) => {
+    const created: number[] = await Promise.all(
+      transactions.map(async (transaction) => {
+        const now = new Date();
         const quotaData: Quota = {
-          id: this.repository.repository.doc().id,
+          id: transaction.id,
           transactionId: transaction.id,
           amount: transaction.amount,
           dueDate: transaction.transactionDate,
           status: "pending",
           currency: transaction.currency,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: now,
+          updatedAt: now,
           deletedAt: null,
         };
-        await this.repository.addQuota(creditCardId, transaction.id, quotaData);
+
+        const wasCreated = await this.repository.addQuotaIfAbsent(
+          creditCardId,
+          transaction.id,
+          quotaData,
+        );
+
+        return wasCreated ? 1 : 0;
       }),
     );
 
-    return transactionsWithoutQuotas.length;
+    return created.reduce((total, current) => total + current, 0);
   }
 }
