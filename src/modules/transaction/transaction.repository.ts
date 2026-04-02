@@ -7,9 +7,45 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
     super(["users", userId, "creditCards", creditCardId], "transactions");
   }
 
+  async addIfAbsent(transaction: Transaction): Promise<boolean> {
+    try {
+      await this.repository
+        .doc(transaction.id)
+        .create(this.datesToIsoStrings(transaction) as Transaction);
+      return true;
+    } catch (error: unknown) {
+      if (this.isAlreadyExistsError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async getCreditCardIdByTransactionId(
+    userId: string,
+    transactionId: string,
+  ): Promise<string | null> {
+    const snapshot = await this.repository.firestore
+      .collectionGroup("transactions")
+      .where("id", "==", transactionId)
+      .get();
+
+    if (!snapshot.empty) {
+      const userScopedDoc = snapshot.docs.find((doc) => {
+        const path = doc.ref.path.split("/");
+        return path[0] === "users" && path[1] === userId;
+      });
+
+      if (userScopedDoc) {
+        return userScopedDoc.ref.parent.parent?.id || null;
+      }
+    }
+
+    return null;
+  }
+
   // Obtener la referencia a la subcolección de cuotas dentro de una transacción
   getQuotasCollection(
-    _creditCardId: string,
     transactionId: string,
   ): FirebaseFirestore.CollectionReference<Quota> {
     return this.repository
@@ -19,29 +55,25 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
 
   // Agregar una cuota a la subcolección
   async addQuota(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
     quota: Quota,
   ): Promise<void> {
     if (!quota.id) {
       quota.id = this.repository.doc().id;
     }
-    const quotasCollection = this.getQuotasCollection(
-      creditCardId,
-      transactionId,
-    );
+    const quotasCollection = this.getQuotasCollection(transactionId);
     await quotasCollection
       .doc(quota.id)
       .set(this.datesToIsoStrings(quota) as Quota);
   }
 
   async addQuotaIfAbsent(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
     quota: Quota,
   ): Promise<boolean> {
     const quotasCollection = this.getQuotasCollection(
-      creditCardId,
       transactionId,
     );
 
@@ -78,11 +110,10 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
 
   // Obtener todas las cuotas de la subcolección
   async getQuotas(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
   ): Promise<Quota[]> {
     const quotasCollection = this.getQuotasCollection(
-      creditCardId,
       transactionId,
     );
     const snapshot = await quotasCollection
@@ -101,11 +132,10 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
 
   // Eliminar todas las cuotas de una transacción (hard delete)
   async deleteAllQuotas(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
   ): Promise<number> {
     const quotasCollection = this.getQuotasCollection(
-      creditCardId,
       transactionId,
     );
     const snapshot = await quotasCollection.get();

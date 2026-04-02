@@ -56,10 +56,25 @@ jest.mock("@config/env.validation", () => ({
   }),
 }));
 
-type StoredTransaction = {
-  id: string;
-  creditCardId: string;
-};
+const addIfAbsentByCollection = new Map<string, Set<string>>();
+
+jest.mock("@/modules/transaction/transaction.repository", () => ({
+  TransactionRepository: class {
+    private readonly key: string;
+
+    constructor(userId: string, creditCardId: string) {
+      this.key = `${userId}:${creditCardId}`;
+    }
+
+    async addIfAbsent(transaction: { id: string }): Promise<boolean> {
+      const existing = addIfAbsentByCollection.get(this.key) ?? new Set<string>();
+      const alreadyExists = existing.has(transaction.id);
+      existing.add(transaction.id);
+      addIfAbsentByCollection.set(this.key, existing);
+      return !alreadyExists;
+    }
+  },
+}));
 
 class InMemoryCreditCardRepository {
   private readonly cards = [
@@ -69,21 +84,8 @@ class InMemoryCreditCardRepository {
     },
   ];
 
-  public readonly storedByCard = new Map<string, Set<string>>();
-
   async findAll() {
     return this.cards;
-  }
-
-  async addTransactionIfAbsent(
-    creditCardId: string,
-    transaction: StoredTransaction,
-  ): Promise<boolean> {
-    const existing = this.storedByCard.get(creditCardId) ?? new Set<string>();
-    const alreadyExists = existing.has(transaction.id);
-    existing.add(transaction.id);
-    this.storedByCard.set(creditCardId, existing);
-    return !alreadyExists;
   }
 }
 
@@ -102,6 +104,7 @@ const encodePayload = (html: string): string =>
 describe("EmailImportService.fetchBankEmails deduplication", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    addIfAbsentByCollection.clear();
   });
 
   it("deduplicates repeated imports using deterministic identity", async () => {
@@ -138,7 +141,7 @@ describe("EmailImportService.fetchBankEmails deduplication", () => {
 
     expect(firstRun.importedCount).toBe(1);
     expect(secondRun.importedCount).toBe(0);
-    expect(repository.storedByCard.get("cc-1")?.size).toBe(1);
+    expect(addIfAbsentByCollection.get("user-1:cc-1")?.size).toBe(1);
   });
 
   it("avoids duplicates under concurrent import runs", async () => {
@@ -169,6 +172,6 @@ describe("EmailImportService.fetchBankEmails deduplication", () => {
     ]);
 
     expect(runA.importedCount + runB.importedCount + runC.importedCount).toBe(1);
-    expect(repository.storedByCard.get("cc-1")?.size).toBe(1);
+    expect(addIfAbsentByCollection.get("user-1:cc-1")?.size).toBe(1);
   });
 });
