@@ -70,6 +70,91 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
       .set(this.datesToIsoStrings(quota) as Quota);
   }
 
+  async replaceQuotasAtomically(
+    transactionId: string,
+    quotas: Quota[],
+  ): Promise<{ deleted: number; created: number }> {
+    const quotasCollection = this.getQuotasCollection(transactionId);
+    const existingSnapshot = await quotasCollection.get();
+    const batch = this.repository.firestore.batch();
+
+    existingSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    quotas.forEach((quota) => {
+      const quotaId = quota.id || quotasCollection.doc().id;
+      if (!quotaId) {
+        throw new Error("Quota ID inválido para escritura atómica");
+      }
+      const quotaToWrite = {
+        ...quota,
+        id: quotaId,
+      } as Quota;
+
+      batch.set(
+        quotasCollection.doc(quotaId),
+        this.datesToIsoStrings(quotaToWrite) as Quota,
+      );
+    });
+
+    await batch.commit();
+
+    return {
+      deleted: existingSnapshot.size,
+      created: quotas.length,
+    };
+  }
+
+  async updateTransactionAndReplaceQuotasAtomically(
+    transactionId: string,
+    transactionPatch: Partial<Transaction>,
+    quotas: Quota[],
+  ): Promise<{ deleted: number; created: number }> {
+    const transactionRef = this.repository.doc(transactionId);
+    const transactionSnapshot = await transactionRef.get();
+
+    if (!transactionSnapshot.exists) {
+      throw new Error("Transacción no encontrada");
+    }
+
+    const quotasCollection = this.getQuotasCollection(transactionId);
+    const existingSnapshot = await quotasCollection.get();
+    const batch = this.repository.firestore.batch();
+
+    batch.update(
+      transactionRef,
+      this.datesToIsoStrings(transactionPatch as Record<string, unknown>),
+    );
+
+    existingSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    quotas.forEach((quota) => {
+      const quotaId = quota.id || quotasCollection.doc().id;
+      if (!quotaId) {
+        throw new Error("Quota ID inválido para escritura atómica");
+      }
+      const quotaToWrite = {
+        ...quota,
+        id: quotaId,
+      } as Quota;
+
+      batch.set(
+        quotasCollection.doc(quotaId),
+        this.datesToIsoStrings(quotaToWrite) as Quota,
+      );
+    });
+
+    await batch.commit();
+
+    return {
+      deleted: existingSnapshot.size,
+      created: quotas.length,
+    };
+  }
+
   async addQuotaIfAbsent(
     _creditCardId: string,
     transactionId: string,

@@ -3,25 +3,18 @@ import { Quota } from "./quota.model";
 import { QuotaRepository } from "./quota.repository";
 
 import { BaseService } from "@/shared/classes/base.service";
+import { RepositoryError } from "@/shared/errors/custom.error";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 
 export class QuotaService extends BaseService<Quota> {
-  // Cambiar el tipo del repository para acceder a los métodos específicos
-  protected repository: QuotaRepository;
   protected transactionRepository: TransactionRepository;
-  protected creditCardRepository: CreditCardRepository;
 
   constructor(
     repository: QuotaRepository,
     transactionRepository: TransactionRepository,
-    creditCardRepository: CreditCardRepository,
   ) {
     super(repository);
-    // Guardar la referencia al repository tipado
-    this.repository = repository;
     this.transactionRepository = transactionRepository;
-    this.creditCardRepository = creditCardRepository;
   }
 
   // Otros métodos específicos del servicio
@@ -39,69 +32,85 @@ export class QuotaService extends BaseService<Quota> {
    * y dueDates mensuales a partir de la fecha de la transacción.
    */
   async splitTransactionIntoQuotas(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
     numberOfQuotas: number,
   ): Promise<{ deleted: number; created: number; quotas: Quota[] }> {
-    // Validar número de cuotas
-    if (numberOfQuotas < 1 || numberOfQuotas > 48) {
-      throw new Error("El número de cuotas debe estar entre 1 y 48");
+    try {
+      if (numberOfQuotas < 1 || numberOfQuotas > 48) {
+        throw new RepositoryError(
+          "El número de cuotas debe estar entre 1 y 48",
+          400,
+        );
+      }
+
+      const transaction = await this.transactionRepository.findById(transactionId);
+      if (!transaction) {
+        throw new RepositoryError("Transacción no encontrada", 404);
+      }
+
+      const quotas = this.buildSplitQuotas(
+        transaction,
+        transactionId,
+        numberOfQuotas,
+      );
+
+      const { deleted, created } =
+        await this.transactionRepository.replaceQuotasAtomically(
+          transactionId,
+          quotas,
+        );
+
+      return { deleted, created, quotas };
+    } catch (error) {
+      if (error instanceof RepositoryError) {
+        throw error;
+      }
+
+      throw new RepositoryError(
+        error instanceof Error ? error.message : "Error desconocido",
+        500,
+      );
     }
+  }
 
-    // Obtener la transacción
-    const transaction =
-      await this.transactionRepository.findById(transactionId);
-    if (!transaction) {
-      throw new Error("Transacción no encontrada");
-    }
-
-    // Eliminar cuotas existentes
-    const deleted = await this.transactionRepository.deleteAllQuotas(
-      creditCardId,
-      transactionId,
-    );
-
-    // Calcular monto por cuota
-    const cuotaAmount = Math.round(transaction.amount / numberOfQuotas);
+  private buildSplitQuotas(
+    transaction: {
+      amount: number;
+      transactionDate: Date | string;
+      currency: string;
+    },
+    transactionId: string,
+    numberOfQuotas: number,
+  ): Quota[] {
+    const quotaAmount = Math.round(transaction.amount / numberOfQuotas);
     const transactionDate = new Date(transaction.transactionDate);
-
-    // Crear las nuevas cuotas
     const createdQuotas: Quota[] = [];
+
     for (let i = 0; i < numberOfQuotas; i++) {
       const dueDate = new Date(transactionDate);
-      if (numberOfQuotas === 1) {
-        // Pago único: dueDate = fecha de la transacción
-      } else {
-        // Cuotas: primera cuota al mes siguiente, y así sucesivamente
+      if (numberOfQuotas > 1) {
         dueDate.setMonth(dueDate.getMonth() + i + 1);
       }
 
-      // Última cuota absorbe la diferencia del redondeo
       const amount =
         i === numberOfQuotas - 1
-          ? transaction.amount - cuotaAmount * (numberOfQuotas - 1)
-          : cuotaAmount;
+          ? transaction.amount - quotaAmount * (numberOfQuotas - 1)
+          : quotaAmount;
 
-      const quota: Quota = {
+      createdQuotas.push({
         id: this.transactionRepository.repository.doc().id,
         transactionId,
         amount,
-        dueDate: dueDate,
+        dueDate,
         status: "pending",
         currency: transaction.currency,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-      };
-
-      await this.transactionRepository.addQuota(
-        creditCardId,
-        transactionId,
-        quota,
-      );
-      createdQuotas.push(quota);
+      });
     }
 
-    return { deleted, created: createdQuotas.length, quotas: createdQuotas };
+    return createdQuotas;
   }
 }
