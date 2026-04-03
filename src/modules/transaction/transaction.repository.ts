@@ -46,8 +46,10 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
 
   // Obtener la referencia a la subcolección de cuotas dentro de una transacción
   getQuotasCollection(
-    transactionId: string,
+    creditCardIdOrTransactionId: string,
+    maybeTransactionId?: string,
   ): FirebaseFirestore.CollectionReference<Quota> {
+    const transactionId = maybeTransactionId ?? creditCardIdOrTransactionId;
     return this.repository
       .doc(transactionId)
       .collection("quotas") as FirebaseFirestore.CollectionReference<Quota>;
