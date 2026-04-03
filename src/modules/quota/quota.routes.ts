@@ -3,7 +3,6 @@ import { QuotaController } from "./quota.controller";
 import { QuotaRepository } from "./quota.repository";
 import { QuotaService } from "./quota.service";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
 import {
@@ -30,7 +29,6 @@ const createQuotaRouter = (): Router => {
       }
 
       try {
-        const creditCardRepository = new CreditCardRepository(userId);
         const transactionRepository = new TransactionRepository(
           userId,
           creditCardId,
@@ -43,13 +41,14 @@ const createQuotaRouter = (): Router => {
         const service = new QuotaService(
           quotaRepository,
           transactionRepository,
-          creditCardRepository,
         );
         const controller = new QuotaController(service);
         res.locals.quotaController = controller;
         next();
       } catch (error) {
-        console.error("Error en el middleware de Quota:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Error desconocido";
+        console.error("Error en el middleware de Quota:", errorMessage);
         res.status(500).json({
           message: "Error interno en la configuración de Quota.",
         });

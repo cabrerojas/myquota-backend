@@ -1,6 +1,7 @@
 import { TransactionRepository } from "./transaction.repository";
 import { Transaction } from "./transaction.model";
 import { Quota } from "@/modules/quota/quota.model";
+import { RepositoryError } from "@/shared/errors/custom.error";
 
 /**
  * Handles CRUD operations for manual (user-entered) transactions and their
@@ -8,7 +9,7 @@ import { Quota } from "@/modules/quota/quota.model";
  * logic from email-import and reporting concerns.
  */
 export class ManualTransactionService {
-  constructor(private readonly repository: TransactionRepository) {}
+  constructor(protected repository: TransactionRepository) {}
 
   /**
    * Creates a manual transaction with all its quotas (paid and pending).
@@ -86,10 +87,13 @@ export class ManualTransactionService {
   ): Promise<{ deletedQuotas: number }> {
     const transaction = await this.repository.findById(transactionId);
     if (!transaction) {
-      throw new Error("Transacción no encontrada");
+      throw new RepositoryError("Transacción no encontrada", 404);
     }
     if (transaction.source !== "manual") {
-      throw new Error("Solo se pueden eliminar transacciones manuales");
+      throw new RepositoryError(
+        "Solo se pueden eliminar transacciones manuales",
+        400,
+      );
     }
 
     const deletedQuotas = await this.repository.deleteAllQuotas(
@@ -105,7 +109,7 @@ export class ManualTransactionService {
    * Updates a manual transaction: modifies data and recreates all quotas.
    */
   async update(
-    creditCardId: string,
+    _creditCardId: string,
     transactionId: string,
     data: {
       merchant: string;
@@ -120,13 +124,13 @@ export class ManualTransactionService {
   ): Promise<{ transaction: Transaction; quotasCreated: number }> {
     const existing = await this.repository.findById(transactionId);
     if (!existing) {
-      throw new Error("Transacción no encontrada");
+      throw new RepositoryError("Transacción no encontrada", 404);
     }
     if (existing.source !== "manual") {
-      throw new Error("Solo se pueden editar transacciones manuales");
+      throw new RepositoryError("Solo se pueden editar transacciones manuales", 400);
     }
 
-    await this.repository.update(transactionId, {
+    const transactionPatch = {
       merchant: data.merchant,
       amount: data.quotaAmount,
       ...(data.categoryId ? { categoryId: data.categoryId } : {}),
@@ -135,36 +139,57 @@ export class ManualTransactionService {
       totalInstallments: data.totalInstallments,
       paidInstallments: data.paidInstallments,
       updatedAt: new Date(),
-    } as Partial<Transaction>);
+    } as Partial<Transaction>;
 
-    // Delete all existing quotas and recreate them
-    await this.repository.deleteAllQuotas(creditCardId, transactionId);
+    const quotas = this.buildManualQuotas(transactionId, data);
 
+    await this.repository.updateTransactionAndReplaceQuotasAtomically(
+      transactionId,
+      transactionPatch,
+      quotas,
+    );
+
+    const updated = await this.repository.findById(transactionId);
+    if (!updated) {
+      throw new RepositoryError("Transacción no encontrada", 404);
+    }
+
+    return { transaction: updated, quotasCreated: data.totalInstallments };
+  }
+
+  private buildManualQuotas(
+    transactionId: string,
+    data: {
+      quotaAmount: number;
+      totalInstallments: number;
+      paidInstallments: number;
+      lastPaidMonth: string;
+      currency: string;
+    },
+  ): Quota[] {
     const [lastYear, lastMonthNum] = data.lastPaidMonth.split("-").map(Number);
+    const quotas: Quota[] = [];
 
     for (let i = 1; i <= data.totalInstallments; i++) {
       const isPaid = i <= data.paidInstallments;
       const monthOffset = i - data.paidInstallments;
       const dueDate = new Date(lastYear, lastMonthNum - 1 + monthOffset, 15);
 
-      const quota: Quota = {
+      quotas.push({
         id: this.repository.repository.doc().id,
         transactionId,
         amount: data.quotaAmount,
-        dueDate: dueDate,
+        dueDate,
         status: isPaid ? "paid" : "pending",
         currency: data.currency,
         paymentDate: isPaid ? dueDate : null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-      };
-
-      await this.repository.addQuota(creditCardId, transactionId, quota);
+      });
     }
 
-    const updated = await this.repository.findById(transactionId);
-    return { transaction: updated!, quotasCreated: data.totalInstallments };
+    return quotas;
   }
 
   /**
