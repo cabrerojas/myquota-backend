@@ -41,7 +41,7 @@ const createTransactionRouter = (): Router => {
           creditCardId,
         );
         const creditCardRepository = new CreditCardRepository(userId);
-        const categoryService = new CategoryService();
+        const categoryService = new CategoryService(userId);
         const categoryMatcher = {
           buildMerchantCategoryMapAsync: async () =>
             categoryService.buildMerchantCategoryMap(),

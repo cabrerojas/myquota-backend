@@ -7,6 +7,7 @@ import { parseFirebaseDate } from "@/shared/utils/date.utils";
 import { getEnv } from "@config/env.validation";
 
 import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
+import { TransactionRepository } from "./transaction.repository";
 import { Transaction } from "./transaction.model";
 import { AuthError } from "@shared/errors/custom.error";
 
@@ -101,6 +102,14 @@ export class EmailImportService {
       merchantMap = new Map();
     }
 
+    const creditCards = await creditCardRepository.findAll();
+    const transactionRepositoryByCard = new Map<string, TransactionRepository>(
+      creditCards.map((card) => [
+        card.id,
+        new TransactionRepository(userId, card.id),
+      ]),
+    );
+
     for (const chunk of chunks) {
       const batchData = (
         await Promise.all(
@@ -170,7 +179,11 @@ export class EmailImportService {
       ).filter((transaction): transaction is Transaction => !!transaction);
 
       if (batchData.length > 0) {
-        totalImported += await this.saveBatch(creditCardRepository, batchData);
+        totalImported += await this.saveBatch(
+          creditCardRepository,
+          transactionRepositoryByCard,
+          batchData,
+        );
       }
     }
 
@@ -207,6 +220,7 @@ export class EmailImportService {
 
   private async saveBatch(
     creditCardRepository: CreditCardRepository,
+    transactionRepositoryByCard: Map<string, TransactionRepository>,
     transactions: Transaction[],
   ): Promise<number> {
     const creditCards = await creditCardRepository.findAll();
@@ -229,10 +243,15 @@ export class EmailImportService {
         const matchedCreditCardId = [...matchingCards].sort()[0];
         transaction.creditCardId = matchedCreditCardId;
 
-        return creditCardRepository.addTransactionIfAbsent(
+        const transactionRepository = transactionRepositoryByCard.get(
           matchedCreditCardId,
-          transaction,
         );
+
+        if (!transactionRepository) {
+          return false;
+        }
+
+        return transactionRepository.addIfAbsent(transaction);
       }),
     );
 
