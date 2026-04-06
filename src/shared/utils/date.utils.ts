@@ -57,8 +57,20 @@ export function convertUtcToChileTime(
 /**
  * Convierte una fecha a las 00:00:00 hora Chile y retorna en UTC.
  * Útil para normalizar fechas de inicio de período.
+ *
+ * Handles both "yyyy-MM-dd" format (no timezone conversion) and ISO strings.
  */
 export function toChileStartOfDay(date: Date | string): Date {
+  // Detect "yyyy-MM-dd" format: contains dash, no T (ISO separator)
+  const isSimpleDate =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+
+  if (isSimpleDate) {
+    // Parse directly as Chile local date (no timezone conversion)
+    return toDate(`${date} 00:00:00`, { timeZone: CHILE_TZ });
+  }
+
+  // ISO format or Date object: use existing logic
   const d =
     typeof date === "string" ? new Date(date) : new Date(date.getTime());
   // Obtener la fecha en Chile (solo día)
@@ -70,8 +82,20 @@ export function toChileStartOfDay(date: Date | string): Date {
 /**
  * Convierte una fecha a las 23:59:59 hora Chile y retorna en UTC.
  * Útil para normalizar fechas de cierre de período.
+ *
+ * Handles both "yyyy-MM-dd" format (no timezone conversion) and ISO strings.
  */
 export function toChileEndOfDay(date: Date | string): Date {
+  // Detect "yyyy-MM-dd" format: contains dash, no T (ISO separator)
+  const isSimpleDate =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+
+  if (isSimpleDate) {
+    // Parse directly as Chile local date (no timezone conversion)
+    return toDate(`${date} 23:59:59`, { timeZone: CHILE_TZ });
+  }
+
+  // ISO format or Date object: use existing logic
   const d =
     typeof date === "string" ? new Date(date) : new Date(date.getTime());
   // Obtener la fecha en Chile (solo día)
