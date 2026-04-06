@@ -8,6 +8,7 @@ import {
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
+import { PaginationParams, QueryResult } from "@/shared/classes/firestore.repository";
 
 export class CreditCardService extends BaseService<CreditCard> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
@@ -28,8 +29,17 @@ export class CreditCardService extends BaseService<CreditCard> {
   /**
    * Retrieves all credit cards for the user with L1 caching.
    * Cache TTL: 5 minutes (LONG)
+   * 
+   * When pagination params provided, returns paginated results with cursor metadata.
+   * When no pagination provided, returns full list (cached).
    */
-  async findAll(): Promise<CreditCard[]> {
+  async findAll(_filters?: Partial<CreditCard>, pagination?: PaginationParams): Promise<QueryResult<CreditCard>> {
+    // If pagination is requested, bypass cache and query directly
+    if (pagination) {
+      return this.repository.findAll(undefined, pagination);
+    }
+
+    // Original behavior: return all credit cards with caching
     if (!this.userId) {
       // Fallback: query directly if no userId available
       return super.findAll();
@@ -38,11 +48,14 @@ export class CreditCardService extends BaseService<CreditCard> {
     const cacheKey = CacheKeys.creditCards(this.userId);
     const cached = CacheService.get<CreditCard[]>(cacheKey);
     if (cached !== null) {
-      return cached;
+      return {
+        items: cached,
+        metadata: { hasMore: false, nextCursor: null },
+      };
     }
 
     const result = await this.repository.findAll();
-    CacheService.set(cacheKey, result, CacheTTL.LONG);
+    CacheService.set(cacheKey, result.items, CacheTTL.LONG);
     return result;
   }
 
@@ -119,7 +132,8 @@ export class CreditCardService extends BaseService<CreditCard> {
     }
 
     // L3: cómputo completo (~N_creditCards reads)
-    const creditCards = await this.repository.findAll();
+    const ccResult = await this.repository.findAll();
+    const creditCards = ccResult.items;
     let count = 0;
 
     for (const card of creditCards) {

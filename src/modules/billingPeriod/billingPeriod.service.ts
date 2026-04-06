@@ -9,6 +9,7 @@ import {
   CacheTTL,
   CacheKeys,
 } from "@/shared/services/cache.service";
+import { PaginationParams, QueryResult } from "@/shared/classes/firestore.repository";
 
 export class BillingPeriodService extends BaseService<BillingPeriod> {
   protected repository: BillingPeriodRepository;
@@ -37,8 +38,15 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
   /**
    * Retrieves all billing periods with L1 caching.
    * Cache TTL: 5 minutes (LONG)
+   * 
+   * When pagination params provided, returns paginated results.
    */
-  async findAll(): Promise<BillingPeriod[]> {
+  async findAll(_filters?: Partial<BillingPeriod>, pagination?: PaginationParams): Promise<QueryResult<BillingPeriod>> {
+    // If pagination requested, bypass cache
+    if (pagination) {
+      return this.repository.findAll(undefined, pagination);
+    }
+
     if (!this.userId || !this.creditCardId) {
       return super.findAll();
     }
@@ -46,11 +54,14 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     const cacheKey = CacheKeys.billingPeriods(this.userId, this.creditCardId);
     const cached = CacheService.get<BillingPeriod[]>(cacheKey);
     if (cached !== null) {
-      return cached;
+      return {
+        items: cached,
+        metadata: { hasMore: false, nextCursor: null },
+      };
     }
 
     const result = await this.repository.findAll();
-    CacheService.set(cacheKey, result, CacheTTL.LONG);
+    CacheService.set(cacheKey, result.items, CacheTTL.LONG);
     return result;
   }
 
@@ -152,7 +163,8 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     const endDate = new Date(period.endDate).getTime();
 
     // Obtener todas las transacciones de la tarjeta
-    const transactions = await this.transactionRepository.findAll();
+    const txResult = await this.transactionRepository.findAll();
+    const transactions = txResult.items;
 
     let paidCount = 0;
     let totalAmount = 0;

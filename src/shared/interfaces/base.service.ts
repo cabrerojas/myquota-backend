@@ -1,8 +1,9 @@
 import { IBaseEntity } from "./base.repository";
+import { PaginationParams, QueryResult } from "../classes/firestore.repository";
 
 export interface IBaseService<T extends IBaseEntity> {
     create(data: Omit<T, keyof IBaseEntity>): Promise<T>;
-    findAll(filters?: Partial<T>): Promise<T[]>;
+    findAll(filters?: Partial<T>, pagination?: PaginationParams): Promise<QueryResult<T>>;
     findById(id: string): Promise<T | null>;
     findOne(filters: Partial<T>): Promise<T | null>;
     update(id: string, data: Partial<Omit<T, keyof IBaseEntity>>): Promise<T | null>;

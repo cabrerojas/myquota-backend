@@ -16,8 +16,8 @@ export class QuotaController {
 
   getQuotas = async (_: Request, res: Response): Promise<void> => {
     try {
-      const quotas = await this.service.findAll();
-      res.status(200).json(quotas);
+      const result = await this.service.findAll();
+      res.status(200).json({ items: result.items, metadata: result.metadata });
     } catch (error) {
       console.error(error);
       res

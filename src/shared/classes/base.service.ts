@@ -1,5 +1,6 @@
 import { IBaseEntity, IBaseRepository } from "../interfaces/base.repository";
 import { IBaseService } from "../interfaces/base.service";
+import { PaginationParams, QueryResult } from "./firestore.repository";
 
 export abstract class BaseService<T extends IBaseEntity>
     implements IBaseService<T> {
@@ -10,8 +11,8 @@ export abstract class BaseService<T extends IBaseEntity>
         return await this.repository.create(data);
     }
 
-    async findAll(filters?: Partial<T>): Promise<T[]> {
-        return await this.repository.findAll(filters);
+    async findAll(filters?: Partial<T>, pagination?: PaginationParams): Promise<QueryResult<T>> {
+        return await this.repository.findAll(filters, pagination);
     }
 
     async findById(id: string): Promise<T | null> {

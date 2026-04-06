@@ -8,8 +8,8 @@ export class BillingPeriodController {
   // Usar métodos de clase arrow functions para evitar problemas con el this
   getBillingPeriods = async (_: Request, res: Response): Promise<void> => {
     try {
-      const BillingPeriods = await this.service.findAll();
-      res.status(200).json(BillingPeriods);
+      const result = await this.service.findAll();
+      res.status(200).json({ items: result.items, metadata: result.metadata });
     } catch (error) {
       console.error("Error getting BillingPeriods:", error);
       res.status(500).json({

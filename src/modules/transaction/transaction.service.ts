@@ -54,10 +54,13 @@ export class TransactionService extends BaseService<Transaction> {
       endDate: string;
     } | null;
   }> {
-    const billingPeriods = await this.billingPeriodRepository.findAll();
+    const bpResult = await this.billingPeriodRepository.findAll();
+    const billingPeriods = bpResult.items;
     // Reutilizar lista pre-cargada si viene del flujo de import, evitando un findAll() extra
-    const transactions =
-      preloadedTransactions ?? (await this.repository.findAll());
+    const txResult = preloadedTransactions 
+      ? { items: preloadedTransactions, metadata: { hasMore: false, nextCursor: null } }
+      : await this.repository.findAll();
+    const transactions = txResult.items;
 
     if (!transactions.length) {
       return { orphanedTransactions: [], suggestedPeriod: null };
@@ -196,7 +199,8 @@ export class TransactionService extends BaseService<Transaction> {
     }
 
     // UN solo findAll() compartido por initializeQuotas y checkOrphans
-    const transactions = await this.repository.findAll();
+    const txResult = await this.repository.findAll();
+    const transactions = txResult.items;
 
     const [quotasCreated, { orphanedTransactions, suggestedPeriod }] =
       await Promise.all([
@@ -277,8 +281,10 @@ export class TransactionService extends BaseService<Transaction> {
     preloadedTransactions?: Transaction[],
   ): Promise<number> {
     // Reutilizar lista pre-cargada si viene del flujo de import, evitando un findAll() extra
-    const transactions =
-      preloadedTransactions ?? (await this.repository.findAll());
+    const txResult = preloadedTransactions 
+      ? { items: preloadedTransactions, metadata: { hasMore: false, nextCursor: null } }
+      : await this.repository.findAll();
+    const transactions = txResult.items;
 
     if (!transactions.length) return 0;
 

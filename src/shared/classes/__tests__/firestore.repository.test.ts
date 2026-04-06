@@ -19,7 +19,7 @@ jest.mock('@/config/firebase', () => {
 
 import { FirestoreRepository } from '../firestore.repository';
 
-type Dummy = { id: string; createdAt?: Date | string; updatedAt?: Date | string; deletedAt?: Date | null };
+type Dummy = { id: string; createdAt: Date; updatedAt: Date; deletedAt?: Date | null };
 
 describe('FirestoreRepository (unit)', () => {
   it('datesToIsoStrings converts Date fields and removes undefined', () => {

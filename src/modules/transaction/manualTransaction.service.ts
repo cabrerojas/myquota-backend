@@ -196,7 +196,8 @@ export class ManualTransactionService {
    * Lists only manual transactions for the current credit card.
    */
   async list(): Promise<Transaction[]> {
-    const all = await this.repository.findAll();
+    const allResult = await this.repository.findAll();
+    const all = allResult.items;
     return all.filter((t) => t.source === "manual");
   }
 }
