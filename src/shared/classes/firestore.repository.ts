@@ -4,6 +4,32 @@ import { RepositoryError } from "../errors/custom.error";
 import { IBaseEntity, IBaseRepository } from "../interfaces/base.repository";
 import { db } from "@/config/firebase";
 
+/**
+ * Pagination parameters for cursor-based pagination
+ */
+export interface PaginationParams {
+  limit?: number;
+  startAfter?: string;
+  orderBy?: string;
+  orderDirection?: "asc" | "desc";
+}
+
+/**
+ * Pagination metadata returned with paginated queries
+ */
+export interface PaginationMetadata {
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+/**
+ * Result of a paginated query
+ */
+export interface QueryResult<T> {
+  items: T[];
+  metadata: PaginationMetadata;
+}
+
 export class FirestoreRepository<
   T extends IBaseEntity,
 > implements IBaseRepository<T> {
@@ -104,7 +130,10 @@ export class FirestoreRepository<
     }
   }
 
-  async findAll(filters?: Partial<T>): Promise<T[]> {
+  async findAll(
+    filters?: Partial<T>,
+    pagination?: PaginationParams,
+  ): Promise<QueryResult<T>> {
     try {
       let query: FirebaseFirestore.Query<T> = this.repository.where(
         "deletedAt",
@@ -112,14 +141,51 @@ export class FirestoreRepository<
         null,
       );
 
+      // Apply filters
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
           query = query.where(key as string, "==", value);
         });
       }
 
-      const snapshot = await query.get();
-      return snapshot.docs.map((doc) => this.sanitizeTimestamps(doc.data()));
+      // Apply ordering
+      const orderByField = pagination?.orderBy || "createdAt";
+      const orderDirection = pagination?.orderDirection || "desc";
+      query = query.orderBy(orderByField, orderDirection);
+
+      // Apply limit (default 50)
+      const limit = pagination?.limit || 50;
+
+      // Apply startAfter cursor if provided
+      if (pagination?.startAfter) {
+        const cursorDoc = await this.repository
+          .doc(pagination.startAfter)
+          .get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      }
+
+      // Fetch one extra to determine hasMore
+      const snapshot = await query.limit(limit + 1).get();
+
+      const hasMore = snapshot.docs.length > limit;
+      const items = hasMore
+        ? snapshot.docs.slice(0, limit)
+        : snapshot.docs;
+
+      const nextCursor =
+        items.length > 0 && hasMore
+          ? (items[items.length - 1].id as string)
+          : null;
+
+      return {
+        items: items.map((doc) => this.sanitizeTimestamps(doc.data())),
+        metadata: {
+          hasMore,
+          nextCursor,
+        },
+      };
     } catch (error) {
       console.error("Error in FirestoreRepository.findAll:", error);
       throw new RepositoryError(`Error finding entities: ${error}`, 500);

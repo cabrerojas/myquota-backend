@@ -8,12 +8,38 @@ export class TransactionController {
   constructor(private readonly service: TransactionService) {}
 
   // Usar métodos de clase arrow functions para evitar problemas con el this
-  getTransactions = async (_: Request, res: Response): Promise<void> => {
+  getTransactions = async (req: Request, res: Response): Promise<void> => {
     try {
-      const transactions = await this.service.findAll();
+      // Extract pagination params
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const startAfter = req.query.startAfter as string | undefined;
+      
+      // Extract date filter params
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      
+      // Determine if we should filter by date
+      const useDateFilter = startDate || endDate;
+      
+      const result = await this.service.findAll(
+        undefined, // no filters
+        { limit, startAfter, orderBy: "transactionDate", orderDirection: "desc" }
+      );
+      let transactions = result.items;
+
+      // Apply date filtering in-memory if specified
+      if (useDateFilter && (startDate || endDate)) {
+        transactions = transactions.filter((tx) => {
+          if (!tx.transactionDate) return false;
+          const txDate = new Date(tx.transactionDate).getTime();
+          if (startDate && txDate < new Date(startDate).getTime()) return false;
+          if (endDate && txDate > new Date(endDate).getTime()) return false;
+          return true;
+        });
+      }
 
       // Adjuntar detalles de categoría (nombre, icono, color) cuando esté disponible
-      const userId = _.user?.userId;
+      const userId = req.user?.userId;
       if (userId) {
         try {
           const categoryService = new CategoryService(userId);
@@ -31,7 +57,7 @@ export class TransactionController {
             }
             return tx;
           });
-          res.status(200).json(enriched);
+          res.status(200).json({ items: enriched, metadata: result.metadata });
           return;
         } catch (e) {
           console.warn("Could not enrich transactions with categories:", e);
@@ -39,7 +65,7 @@ export class TransactionController {
         }
       }
 
-      res.status(200).json(transactions);
+      res.status(200).json({ items: transactions, metadata: result.metadata });
     } catch (error) {
       console.error("Error getting transactions:", error);
       res.status(500).json({

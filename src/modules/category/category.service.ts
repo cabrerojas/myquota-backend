@@ -34,12 +34,12 @@ export class CategoryService extends BaseService<Category> {
     const cached = CacheService.get<Category[]>(cacheKey);
     if (cached !== null) return cached;
 
-    const [global, user] = await Promise.all([
-      this.globalRepository.findAll(),
-      this.userRepository ? this.userRepository.findAll() : Promise.resolve([]),
-    ]);
+    const globalResult = await this.globalRepository.findAll();
+    const userResult = this.userRepository 
+      ? await this.userRepository.findAll() 
+      : { items: [], metadata: { hasMore: false, nextCursor: null } };
 
-    const all = [...global, ...user];
+    const all = [...globalResult.items, ...userResult.items];
 
     if (!options?.deduplicate) {
       CacheService.set(cacheKey, all, CacheTTL.LONG);
@@ -48,15 +48,9 @@ export class CategoryService extends BaseService<Category> {
 
     // Deduplicate by normalizedName — personal categories take priority
     const seen = new Map<string, Category>();
-    for (const cat of user) {
+    for (const cat of all) {
       const key = cat.normalizedName ?? cat.name.trim().toLowerCase();
       seen.set(key, cat);
-    }
-    for (const cat of global) {
-      const key = cat.normalizedName ?? cat.name.trim().toLowerCase();
-      if (!seen.has(key)) {
-        seen.set(key, cat);
-      }
     }
     const deduplicated = Array.from(seen.values());
     CacheService.set(cacheKey, deduplicated, CacheTTL.LONG);
@@ -88,7 +82,8 @@ export class CategoryService extends BaseService<Category> {
   async findCategoryByMerchant(
     merchantName: string,
   ): Promise<{ categoryId: string; categoryName: string } | null> {
-    const categories = await this.globalRepository.findAll();
+    const result = await this.globalRepository.findAll();
+    const categories = result.items;
     for (const category of categories) {
       const merchantService = new MerchantPatternService(category.id);
       const match = await merchantService.findMatchingPattern(merchantName);
@@ -109,7 +104,8 @@ export class CategoryService extends BaseService<Category> {
   async buildMerchantCategoryMap(): Promise<
     Map<string, { categoryId: string; categoryName: string }>
   > {
-    const categories = await this.globalRepository.findAll();
+    const result = await this.globalRepository.findAll();
+    const categories = result.items;
     const map = new Map<string, { categoryId: string; categoryName: string }>();
     await Promise.all(
       categories.map(async (category) => {
@@ -296,7 +292,8 @@ export class CategoryService extends BaseService<Category> {
     merchantName: string,
   ): Promise<Array<{ categoryId: string; count: number }>> {
     const creditCardRepo = new CreditCardRepository(userId);
-    const creditCards = await creditCardRepo.findAll();
+    const ccResult = await creditCardRepo.findAll();
+    const creditCards = ccResult.items;
     const categoryCount = new Map<string, number>();
 
     const normalizedMerchant = merchantName.trim().toUpperCase();

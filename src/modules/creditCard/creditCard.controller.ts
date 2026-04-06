@@ -6,10 +6,17 @@ export class CreditCardController {
   constructor(private readonly service: CreditCardService) {}
 
   // Usar métodos de clase arrow functions para evitar problemas con el this
-  getCreditCards = async (_: Request, res: Response): Promise<void> => {
+  getCreditCards = async (req: Request, res: Response): Promise<void> => {
     try {
-      const CreditCards = await this.service.findAll();
-      res.status(200).json(CreditCards);
+      // Check for pagination query params
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+      const startAfter = req.query.startAfter as string | undefined;
+      
+      const result = await this.service.findAll(
+        undefined, // no filters
+        limit || startAfter ? { limit, startAfter } : undefined
+      );
+      res.status(200).json({ items: result.items, metadata: result.metadata });
     } catch (error) {
       console.error("Error getting CreditCards:", error);
       res.status(500).json({

@@ -102,7 +102,8 @@ export class EmailImportService {
       merchantMap = new Map();
     }
 
-    const creditCards = await creditCardRepository.findAll();
+    const ccResult = await creditCardRepository.findAll();
+    const creditCards = ccResult.items;
     const transactionRepositoryByCard = new Map<string, TransactionRepository>(
       creditCards.map((card) => [
         card.id,
@@ -223,7 +224,8 @@ export class EmailImportService {
     transactionRepositoryByCard: Map<string, TransactionRepository>,
     transactions: Transaction[],
   ): Promise<number> {
-    const creditCards = await creditCardRepository.findAll();
+    const ccResult = await creditCardRepository.findAll();
+    const creditCards = ccResult.items;
     const byLastDigits = new Map<string, string[]>();
 
     for (const card of creditCards) {

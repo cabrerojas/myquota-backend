@@ -58,10 +58,13 @@ export class StatsService {
     if (cached !== null) return cached;
 
     try {
-      const [billingPeriods, transactions] = await Promise.all([
+      const [bpResult, txResult] = await Promise.all([
         this.billingPeriodRepository.findAll(),
         this.transactionRepository.findAll(),
       ]);
+
+      const billingPeriods = bpResult.items;
+      const transactions = txResult.items;
 
       if (!billingPeriods.length || !transactions.length) return [];
 
@@ -207,7 +210,8 @@ export class StatsService {
     userId: string,
   ): Promise<DebtSummary> {
     const creditCardRepo = new CreditCardRepository(userId);
-    const cards = await creditCardRepo.findAll();
+    const ccResult = await creditCardRepo.findAll();
+    const cards = ccResult.items;
 
     let totalCLP = 0;
     let totalUSD = 0;
@@ -228,7 +232,8 @@ export class StatsService {
 
     for (const card of cards) {
       const bpRepo = new BillingPeriodRepository(userId, card.id);
-      const periods = await bpRepo.findAll();
+      const bpResult = await bpRepo.findAll();
+      const periods = bpResult.items;
       allBillingPeriods.push(
         ...periods.map((p) => ({
           month: p.month,
@@ -250,7 +255,8 @@ export class StatsService {
     await Promise.all(
       cards.map(async (card) => {
         const txRepo = new TransactionRepository(userId, card.id);
-        const transactions = await txRepo.findAll();
+        const txResult = await txRepo.findAll();
+        const transactions = txResult.items;
 
         // Get all quotas for all transactions in parallel
         const allQuotas = await Promise.all(
@@ -394,14 +400,16 @@ export class StatsService {
     const catMap = new Map(allCategories.map((c) => [c.id, c.name]));
 
     // Obtener los BillingPeriods para la tarjeta de crédito
-    const billingPeriods = await this.billingPeriodRepository.findAll();
+    const bpResult = await this.billingPeriodRepository.findAll();
+    const billingPeriods = bpResult.items;
 
     if (!billingPeriods.length) {
       return [];
     }
 
     // Obtener todas las transacciones de la tarjeta de crédito
-    const transactions = await this.transactionRepository.findAll();
+    const txResult = await this.transactionRepository.findAll();
+    const transactions = txResult.items;
 
     if (!transactions.length) {
       return [];
@@ -493,7 +501,8 @@ export class StatsService {
    */
   static async _computeUncategorizedCount(userId: string): Promise<number> {
     const ccRepo = new CreditCardRepository(userId);
-    const creditCards = await ccRepo.findAll();
+    const ccResult = await ccRepo.findAll();
+    const creditCards = ccResult.items;
     let count = 0;
     for (const card of creditCards) {
       const txCollection = ccRepo.getTransactionsCollection(card.id);
