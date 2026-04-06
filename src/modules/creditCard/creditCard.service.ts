@@ -7,15 +7,79 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
+import { IBaseEntity } from "@/shared/interfaces/base.repository";
 
 export class CreditCardService extends BaseService<CreditCard> {
   // Cambiar el tipo del repository para acceder a los métodos específicos
   protected repository: CreditCardRepository;
+  private userId?: string;
 
   constructor(repository: CreditCardRepository) {
     super(repository);
     // Guardar la referencia al repository tipado
     this.repository = repository;
+    // Extract userId from repository path: ["users", userId, "creditCards"]
+    const path = (repository as unknown as { repository: { path: string[] } }).repository?.path;
+    if (path && path.length >= 2) {
+      this.userId = path[1];
+    }
+  }
+
+  /**
+   * Retrieves all credit cards for the user with L1 caching.
+   * Cache TTL: 5 minutes (LONG)
+   */
+  async findAll(): Promise<CreditCard[]> {
+    if (!this.userId) {
+      // Fallback: query directly if no userId available
+      return super.findAll();
+    }
+
+    const cacheKey = CacheKeys.creditCards(this.userId);
+    const cached = CacheService.get<CreditCard[]>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const result = await this.repository.findAll();
+    CacheService.set(cacheKey, result, CacheTTL.LONG);
+    return result;
+  }
+
+  /**
+   * Create a credit card and invalidate the cache.
+   */
+  async create(data: Omit<CreditCard, keyof IBaseEntity>): Promise<CreditCard> {
+    const result = await super.create(data);
+    // Invalidate cache after create
+    if (this.userId) {
+      CacheService.invalidateByPrefix(CacheKeys.userPrefix(this.userId));
+    }
+    return result;
+  }
+
+  /**
+   * Update a credit card and invalidate the cache.
+   */
+  async update(id: string, data: Partial<Omit<CreditCard, keyof IBaseEntity>>): Promise<CreditCard | null> {
+    const result = await super.update(id, data);
+    // Invalidate cache after update
+    if (this.userId) {
+      CacheService.invalidateByPrefix(CacheKeys.userPrefix(this.userId));
+    }
+    return result;
+  }
+
+  /**
+   * Delete (soft) a credit card and invalidate the cache.
+   */
+  async softDelete(id: string): Promise<boolean> {
+    const result = await super.softDelete(id);
+    // Invalidate cache after delete
+    if (this.userId) {
+      CacheService.invalidateByPrefix(CacheKeys.userPrefix(this.userId));
+    }
+    return result;
   }
 
   /**

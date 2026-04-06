@@ -4,11 +4,17 @@ import { BillingPeriod } from "./billingPeriod.model";
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
 import { toChileStartOfDay, toChileEndOfDay } from "@/shared/utils/date.utils";
 import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import {
+  CacheService,
+  CacheTTL,
+  CacheKeys,
+} from "@/shared/services/cache.service";
 
 export class BillingPeriodService extends BaseService<BillingPeriod> {
   protected repository: BillingPeriodRepository;
   private transactionRepository: TransactionRepository | null = null;
   private creditCardId: string;
+  private userId?: string;
 
   constructor(
     repository: BillingPeriodRepository,
@@ -21,6 +27,78 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     if (transactionRepository) {
       this.transactionRepository = transactionRepository;
     }
+    // Extract userId from repository path: ["users", userId, "creditCards", creditCardId]
+    const path = (repository as unknown as { repository: { path: string[] } }).repository?.path;
+    if (path && path.length >= 2) {
+      this.userId = path[1];
+    }
+  }
+
+  /**
+   * Retrieves all billing periods with L1 caching.
+   * Cache TTL: 5 minutes (LONG)
+   */
+  async findAll(): Promise<BillingPeriod[]> {
+    if (!this.userId || !this.creditCardId) {
+      return super.findAll();
+    }
+
+    const cacheKey = CacheKeys.billingPeriods(this.userId, this.creditCardId);
+    const cached = CacheService.get<BillingPeriod[]>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const result = await this.repository.findAll();
+    CacheService.set(cacheKey, result, CacheTTL.LONG);
+    return result;
+  }
+
+  /**
+   * Create a billing period and invalidate the cache.
+   */
+  async create(
+    data: Omit<BillingPeriod, keyof IBaseEntity>,
+  ): Promise<BillingPeriod> {
+    const result = await super.create(this.normalizeDates(data));
+    // Invalidate cache after create
+    if (this.userId && this.creditCardId) {
+      CacheService.invalidate(
+        CacheKeys.billingPeriods(this.userId, this.creditCardId),
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Update a billing period and invalidate the cache.
+   */
+  async update(
+    id: string,
+    data: Partial<Omit<BillingPeriod, keyof IBaseEntity>>,
+  ): Promise<BillingPeriod | null> {
+    const result = await super.update(id, this.normalizeDates(data));
+    // Invalidate cache after update
+    if (this.userId && this.creditCardId) {
+      CacheService.invalidate(
+        CacheKeys.billingPeriods(this.userId, this.creditCardId),
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Delete (soft) a billing period and invalidate the cache.
+   */
+  async softDelete(id: string): Promise<boolean> {
+    const result = await super.softDelete(id);
+    // Invalidate cache after delete
+    if (this.userId && this.creditCardId) {
+      CacheService.invalidate(
+        CacheKeys.billingPeriods(this.userId, this.creditCardId),
+      );
+    }
+    return result;
   }
 
   /**
@@ -54,22 +132,8 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     return normalized;
   }
 
-  async create(
-    data: Omit<BillingPeriod, keyof IBaseEntity>,
-  ): Promise<BillingPeriod> {
-    return super.create(this.normalizeDates(data));
-  }
-
-  async update(
-    id: string,
-    data: Partial<Omit<BillingPeriod, keyof IBaseEntity>>,
-  ): Promise<BillingPeriod | null> {
-    return super.update(id, this.normalizeDates(data));
-  }
-
   /**
-   * Marca como pagadas todas las cuotas pendientes cuyo dueDate
-   * cae dentro del rango del período de facturación.
+   * Mark as paid all pending quotas whose dueDate falls within the billing period range.
    */
   async payBillingPeriod(
     billingPeriodId: string,

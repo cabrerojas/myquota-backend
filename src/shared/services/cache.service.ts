@@ -88,6 +88,8 @@ export const CacheKeys = {
   globalCategories: (): string => `global:categories`,
   userCategories: (userId: string): string => `user:${userId}:categories`,
   creditCards: (userId: string): string => `user:${userId}:credit-cards`,
+  billingPeriods: (userId: string, creditCardId: string): string =>
+    `user:${userId}:cc:${creditCardId}:billing-periods`,
   monthlyQuotaSum: (creditCardId: string): string =>
     `cc:${creditCardId}:monthly-quota-sum`,
   userPrefix: (userId: string): string => `user:${userId}:`,
