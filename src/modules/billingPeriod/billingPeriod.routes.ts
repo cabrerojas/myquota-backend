@@ -1,13 +1,14 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { BillingPeriodController } from "./billingPeriod.controller";
 import { BillingPeriodRepository } from "./billingPeriod.repository";
 import { BillingPeriodService } from "./billingPeriod.service";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { authenticate } from "@/shared/middlewares/auth.middleware";
-import { validate } from "@shared/middlewares/validate.middleware";
 import {
   createBillingPeriodSchema,
   updateBillingPeriodSchema,
+  payBillingPeriodSchema,
 } from "./billingPeriod.schemas";
 
 const createBillingPeriodRouter = (): Router => {
@@ -37,6 +38,7 @@ const createBillingPeriodRouter = (): Router => {
           repository,
           transactionRepository,
           creditCardId,
+          userId,
         );
         const controller = new BillingPeriodController(service);
 
@@ -88,6 +90,7 @@ const createBillingPeriodRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/billingPeriods/:billingPeriodId/pay",
+    validate(payBillingPeriodSchema),
     (req: Request, res: Response) => {
       return res.locals.billingPeriodController.payBillingPeriod(req, res);
     },

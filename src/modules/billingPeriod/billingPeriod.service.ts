@@ -1,15 +1,15 @@
 import { BaseService } from "@/shared/classes/base.service";
-import { BillingPeriodRepository } from "./billingPeriod.repository";
-import { BillingPeriod } from "./billingPeriod.model";
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
 import { toChileStartOfDay, toChileEndOfDay } from "@/shared/utils/date.utils";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import {
   CacheService,
   CacheTTL,
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { PaginationParams, QueryResult } from "@/shared/classes/firestore.repository";
+import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import { BillingPeriodRepository } from "./billingPeriod.repository";
+import { BillingPeriod } from "./billingPeriod.model";
 
 export class BillingPeriodService extends BaseService<BillingPeriod> {
   protected repository: BillingPeriodRepository;
@@ -21,17 +21,14 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     repository: BillingPeriodRepository,
     transactionRepository?: TransactionRepository,
     creditCardId?: string,
+    userId?: string,
   ) {
     super(repository);
     this.repository = repository;
     this.creditCardId = creditCardId || "";
+    this.userId = userId;
     if (transactionRepository) {
       this.transactionRepository = transactionRepository;
-    }
-    // Extract userId from repository path: ["users", userId, "creditCards", creditCardId]
-    const path = (repository as unknown as { repository: { path: string[] } }).repository?.path;
-    if (path && path.length >= 2) {
-      this.userId = path[1];
     }
   }
 

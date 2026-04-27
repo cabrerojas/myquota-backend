@@ -1,7 +1,3 @@
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
-import { CategoryService } from "@/modules/category/category.service";
 import { convertUtcToChileTime } from "@/shared/utils/date.utils";
 import {
   CacheService,
@@ -9,6 +5,11 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { db } from "@/config/firebase";
+import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
+import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import { CategoryService } from "@/modules/category/category.service";
+import { WhatIfProduct } from "./stats.schemas";
 
 /**
  * Maximum age of a Firestore-persisted summary before forcing a full recompute.
@@ -366,8 +367,9 @@ export class StatsService {
       if (doc.exists) {
         const raw = doc.data()!;
         const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
+        const isEmpty = Array.isArray(raw.data) && (raw.data as MonthlyStatEntry[]).length === 0;
         const isStale =
-          raw.needsRecompute === true || ageMs >= SUMMARY_MAX_AGE_MS;
+          raw.needsRecompute === true || ageMs >= SUMMARY_MAX_AGE_MS || isEmpty;
         if (!isStale && raw.schemaVersion === 3) {
           const stats = raw.data as MonthlyStatEntry[];
           CacheService.set(memKey, stats, CacheTTL.LONG);
@@ -623,7 +625,6 @@ export class StatsService {
 }
 
 // What-if calculation: map products -> temporary transactions -> compute projection
-import { WhatIfProduct } from "./stats.schemas";
 
 interface QuotaInput {
   merchant: string;
