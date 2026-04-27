@@ -1,6 +1,6 @@
 import { FirestoreRepository } from "@/shared/classes/firestore.repository";
-import { Transaction } from "./transaction.model";
 import { Quota } from "@/modules/quota/quota.model";
+import { Transaction } from "./transaction.model";
 
 export class TransactionRepository extends FirestoreRepository<Transaction> {
   constructor(userId: string, creditCardId: string) {
@@ -193,6 +193,14 @@ export class TransactionRepository extends FirestoreRepository<Transaction> {
       ((error as { details?: string }).details?.includes("ALREADY_EXISTS") ??
         false)
     );
+  }
+
+  async findManual(): Promise<import("./transaction.model").Transaction[]> {
+    const snapshot = await this.repository
+      .where("deletedAt", "==", null)
+      .where("source", "==", "manual")
+      .get();
+    return snapshot.docs.map((doc) => this.sanitizeTimestamps(doc.data()));
   }
 
   // Obtener todas las cuotas de la subcolección

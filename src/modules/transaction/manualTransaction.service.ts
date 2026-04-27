@@ -1,7 +1,7 @@
+import { RepositoryError } from "@/shared/errors/custom.error";
+import { Quota } from "@/modules/quota/quota.model";
 import { TransactionRepository } from "./transaction.repository";
 import { Transaction } from "./transaction.model";
-import { Quota } from "@/modules/quota/quota.model";
-import { RepositoryError } from "@/shared/errors/custom.error";
 
 /**
  * Handles CRUD operations for manual (user-entered) transactions and their
@@ -196,8 +196,6 @@ export class ManualTransactionService {
    * Lists only manual transactions for the current credit card.
    */
   async list(): Promise<Transaction[]> {
-    const allResult = await this.repository.findAll();
-    const all = allResult.items;
-    return all.filter((t) => t.source === "manual");
+    return this.repository.findManual();
   }
 }
