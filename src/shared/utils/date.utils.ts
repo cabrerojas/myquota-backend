@@ -1,5 +1,4 @@
 import { format, toDate } from "date-fns-tz";
-import { Timestamp } from "@google-cloud/firestore";
 
 const CHILE_TZ = "America/Santiago";
 
@@ -29,15 +28,13 @@ export function parseFirebaseDate(dateString: string): Date | null {
  * @returns La fecha convertida y formateada en la zona horaria de Chile.
  */
 export function convertUtcToChileTime(
-  date: Date | string | Timestamp,
+  date: Date | string,
   dateFormat: string = "yyyy-MM-dd HH:mm:ss",
 ): string {
   const timeZone = "America/Santiago";
   let utcDate: Date;
 
-  if (date instanceof Timestamp) {
-    utcDate = date.toDate();
-  } else if (typeof date === "string") {
+  if (typeof date === "string") {
     utcDate = new Date(date);
   } else {
     utcDate = date;
