@@ -1,6 +1,6 @@
 import { RepositoryError } from "@/shared/errors/custom.error";
 import { Quota } from "@/modules/quota/quota.model";
-import { TransactionRepository } from "./transaction.repository";
+import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { Transaction } from "./transaction.model";
 
 /**
@@ -9,7 +9,7 @@ import { Transaction } from "./transaction.model";
  * logic from email-import and reporting concerns.
  */
 export class ManualTransactionService {
-  constructor(protected repository: TransactionRepository) {}
+  constructor(protected repository: TransactionRepositorySupabase) {}
 
   /**
    * Creates a manual transaction with all its quotas (paid and pending).
@@ -27,7 +27,7 @@ export class ManualTransactionService {
       categoryId?: string;
     },
   ): Promise<{ transaction: Transaction; quotasCreated: number }> {
-    const transactionId = this.repository.repository.doc().id;
+    const transactionId = (crypto as { randomUUID: () => string }).randomUUID();
     const transaction: Transaction = {
       id: transactionId,
       amount: data.quotaAmount,
@@ -60,7 +60,7 @@ export class ManualTransactionService {
       const dueDate = new Date(lastYear, lastMonthNum - 1 + monthOffset, 15);
 
       const quota: Quota = {
-        id: this.repository.repository.doc().id,
+        id: (crypto as { randomUUID: () => string }).randomUUID(),
         transactionId,
         amount: data.quotaAmount,
         dueDate: dueDate,
@@ -176,7 +176,7 @@ export class ManualTransactionService {
       const dueDate = new Date(lastYear, lastMonthNum - 1 + monthOffset, 15);
 
       quotas.push({
-        id: this.repository.repository.doc().id,
+        id: (crypto as { randomUUID: () => string }).randomUUID(),
         transactionId,
         amount: data.quotaAmount,
         dueDate,

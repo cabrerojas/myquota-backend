@@ -1,10 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { TransactionController } from "./transaction.controller";
-import { TransactionRepository } from "./transaction.repository";
+import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { TransactionService } from "./transaction.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
-import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
-import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
+import { BillingPeriodRepositorySupabase } from "@modules/billingPeriod/billingPeriod.repository.supabase";
+import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
 import { CategoryService } from "@/modules/category/category.service";
 import { validate } from "@shared/middlewares/validate.middleware";
 import {
@@ -32,15 +32,9 @@ const createTransactionRouter = (): Router => {
       }
 
       try {
-        const transactionRepository = new TransactionRepository(
-          userId,
-          creditCardId,
-        );
-        const billingPeriodRepository = new BillingPeriodRepository(
-          userId,
-          creditCardId,
-        );
-        const creditCardRepository = new CreditCardRepository(userId);
+        const transactionRepository = new TransactionRepositorySupabase(creditCardId);
+        const billingPeriodRepository = new BillingPeriodRepositorySupabase(creditCardId);
+        const creditCardRepository = new CreditCardRepositorySupabase(userId);
         const categoryService = new CategoryService(userId);
         const categoryMatcher = {
           buildMerchantCategoryMapAsync: async () =>

@@ -1,9 +1,17 @@
-import { db } from "@/config/firebase";
-import { CreditCard } from "@modules/creditCard/creditCard.model";
-import { Transaction } from "@modules/transaction/transaction.model";
-import { BillingPeriod } from "@modules/billingPeriod/billingPeriod.model";
-import { Quota } from "./quota.model";
-import { CacheService } from "@shared/services/cache.service";
+// src/modules/quota/debtForecast.service.ts
+// Debt forecast service — computes monthly debt projections from pending quotas.
+// Uses Supabase SQL queries from sql-queries.ts.
+// Firestore collectionGroup code has been removed.
+
+import { Transaction } from '@modules/transaction/transaction.model';
+import { BillingPeriod } from '@modules/billingPeriod/billingPeriod.model';
+import { Quota } from './quota.model';
+import { CacheService } from '@shared/services/cache.service';
+import {
+  executePendingQuotasByUserQuery,
+  executeAllTransactionsByUserQuery,
+  executeAllBillingPeriodsByUserQuery,
+} from '@/shared/lib/sql-queries';
 
 // Extended Transaction type for what-if simulations - exported for use in stats module
 export interface TransactionWithQuotas {
@@ -41,11 +49,11 @@ export class DebtForecastService {
     this.userId = userId;
   }
 
-  private isPathScopedToUser(path: string): boolean {
-    const segments = path.split("/");
-    return segments[0] === "users" && segments[1] === this.userId;
-  }
-
+  /**
+   * getDebtForecast — returns monthly debt projection.
+   * L1: debtForecast:{userId} cache (5 min TTL)
+   * L3: SQL queries via sql-queries.ts
+   */
   public async getDebtForecast(
     transactionsOverride?: TransactionWithQuotas[],
   ): Promise<{
@@ -53,9 +61,8 @@ export class DebtForecastService {
     totalDebtCLP: number;
     totalDebtUSD: number;
   }> {
-    // --- CACHE ---
     const cacheKey = `debtForecast:${this.userId}`;
-    // Do NOT use cached results when a transactionsOverride is provided
+
     if (!transactionsOverride || !transactionsOverride.length) {
       const cached = CacheService.get<{
         months: MonthBucket[];
@@ -65,128 +72,110 @@ export class DebtForecastService {
       if (cached) return cached;
     }
 
-    // --- BATCH FETCH ---
-    // If transactionsOverride is provided, use its quotas instead of reading
-    // quotas from Firestore. transactionsOverride is expected to be an array
-    // of TransactionWithQuotas objects. This enables temporary, in-memory simulations.
     let allQuotas: (Quota & { transactionId: string; creditCardId: string })[] = [];
     const txMap = new Map<string, Transaction>();
 
     if (transactionsOverride && transactionsOverride.length) {
-      // Build allQuotas and txMap from the override
+      // Build from override (used for what-if simulations)
       for (const tx of transactionsOverride) {
         txMap.set(tx.id, tx as unknown as Transaction);
-        const quotasFromTx = tx.quotas ?? [];
-        for (const q of quotasFromTx) {
+        for (const q of tx.quotas ?? []) {
           allQuotas.push({
             ...q,
             transactionId: tx.id,
-            creditCardId: tx.creditCardId || "",
+            creditCardId: tx.creditCardId || '',
           });
         }
       }
     } else {
-      // 1. Todas las cuotas pendientes del usuario (collectionGroup)
-      const quotasSnap = await db
-        .collectionGroup("quotas")
-        .where("status", "==", "pending")
-        .where("deletedAt", "==", null)
-        .get();
-      allQuotas = quotasSnap.docs
-        .filter((doc) => this.isPathScopedToUser(doc.ref.path))
-        .map((doc) => {
-          const data = doc.data() as Quota & { transactionId: string };
-          // Parse creditCardId y transactionId desde el path
-          const path = doc.ref.path.split("/");
-          // ...users/{userId}/creditCards/{creditCardId}/transactions/{transactionId}/quotas/{quotaId}
-          const creditCardId = path[3];
-          const transactionId = path[5];
-          return {
-            ...data,
-            creditCardId,
-            transactionId,
-          };
-        });
-    }
+      // SQL path: fetch all data via sql-queries.ts
+      const [quotaRows, txRows, bpRows] = await Promise.all([
+        executePendingQuotasByUserQuery(this.userId),
+        executeAllTransactionsByUserQuery(this.userId),
+        executeAllBillingPeriodsByUserQuery(this.userId),
+      ]);
 
-    // 2. Todas las tarjetas del usuario
-    const cardsSnap = await db
-      .collection("users")
-      .doc(this.userId)
-      .collection("creditCards")
-      .where("deletedAt", "==", null)
-      .get();
-    const cards: CreditCard[] = cardsSnap.docs.map(
-      (doc) => doc.data() as CreditCard,
-    );
-    const cardMap = new Map(cards.map((card) => [card.id, card]));
+      // Build txMap from transaction rows
+      for (const tx of txRows) {
+        txMap.set(tx.id, {
+          id: tx.id,
+          creditCardId: tx.credit_card_id,
+          amount: tx.amount,
+          currency: tx.currency,
+          merchant: tx.merchant,
+          categoryId: tx.category_id ?? undefined,
+          transactionDate: new Date(tx.transaction_date),
+          source: 'manual' as const,
+          description: undefined,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+          cardType: '',
+          cardLastDigits: '',
+          bank: '',
+        } as unknown as Transaction);
+      }
 
-    // 3. Todas las transacciones del usuario (collectionGroup)
-    if (!transactionsOverride || !transactionsOverride.length) {
-      const txsSnap = await db
-        .collectionGroup("transactions")
-        .where("deletedAt", "==", null)
-        .get();
-      const txs: Transaction[] = txsSnap.docs
-        .filter((doc) => this.isPathScopedToUser(doc.ref.path))
-        .map((doc) => doc.data() as Transaction);
-      for (const tx of txs) txMap.set(tx.id, tx);
-    }
+      // Map quota rows to Quota objects
+      allQuotas = quotaRows.map((q) => ({
+        id: q.id,
+        transactionId: q.transaction_id,
+        creditCardId: q.credit_card_id,
+        amount: q.amount,
+        currency: q.currency,
+        dueDate: new Date(q.due_date),
+        status: q.status as 'pending' | 'paid',
+        paymentDate: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+        merchant: q.merchant,
+      }));
 
-    // 4. Todos los billingPeriods del usuario (collectionGroup)
-    const periodsSnap = await db
-      .collectionGroup("billingPeriods")
-      .where("deletedAt", "==", null)
-      .get();
-    const allBillingPeriods: (BillingPeriod & { creditCardId: string })[] =
-      periodsSnap.docs
-        .filter((doc) => this.isPathScopedToUser(doc.ref.path))
-        .map((doc) => {
-          const data = doc.data() as BillingPeriod;
-          // ...users/{userId}/creditCards/{creditCardId}/billingPeriods/{periodId}
-          const path = doc.ref.path.split("/");
-          const creditCardId = path[3];
-          return { ...data, creditCardId };
-        });
-    const sortedPeriods = [...allBillingPeriods].sort(
-      (a, b) =>
-        new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-    );
-
-    // --- ENRIQUECIMIENTO ---
-    // Enriquecer cuotas con merchant, card info, etc.
-    const enrichedQuotas = allQuotas.map((q) => {
-      const tx = txMap.get(q.transactionId);
-      const card = cardMap.get(q.creditCardId);
-      return {
-        ...q,
-        merchant: tx?.merchant || "",
-        creditCardLabel: card ? `${card.cardType} •${card.cardLastDigits}` : "",
-        quotaNumber: 0, // se calcula abajo
-        totalQuotas: 0, // se calcula abajo
-      };
-    });
-
-    // Agrupar cuotas por transacción para calcular quotaNumber y totalQuotas
-    const quotasByTx = new Map<string, typeof enrichedQuotas>();
-    for (const q of enrichedQuotas) {
-      if (!quotasByTx.has(q.transactionId)) quotasByTx.set(q.transactionId, []);
-      quotasByTx.get(q.transactionId)!.push(q);
-    }
-    for (const arr of quotasByTx.values()) {
-      arr.sort(
-        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      // Build sorted billing periods for computeDebtForecast
+      const sortedPeriods: (BillingPeriod & { creditCardId: string })[] = bpRows.map(
+        (bp) => ({
+          id: bp.id,
+          creditCardId: bp.credit_card_id,
+          month: bp.month,
+          startDate: new Date(bp.start_date),
+          endDate: new Date(bp.end_date),
+          dueDate: new Date(bp.end_date),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        }),
       );
-      arr.forEach((q, idx) => {
-        q.quotaNumber = idx + 1;
-        q.totalQuotas = arr.length;
-      });
+
+      const result = computeDebtForecast(
+        allQuotas.map((q) => ({
+          ...q,
+          merchant: (q as { merchant?: string }).merchant || '',
+          creditCardLabel: '',
+          quotaNumber: 0,
+          totalQuotas: 0,
+        })),
+        sortedPeriods,
+      );
+
+      CacheService.set(cacheKey, result, 300);
+      return result;
     }
 
-    const result = computeDebtForecast(enrichedQuotas, sortedPeriods);
-    // Only cache real computations (no transactionsOverride)
+    // transactionsOverride path: compute from override data
+    const result = computeDebtForecast(
+      allQuotas.map((q) => ({
+        ...q,
+        merchant: (q as { merchant?: string }).merchant || '',
+        creditCardLabel: '',
+        quotaNumber: 0,
+        totalQuotas: 0,
+      })),
+      [],
+    );
+
     if (!transactionsOverride || !transactionsOverride.length) {
-      CacheService.set(cacheKey, result, 300); // cache 5 min
+      CacheService.set(cacheKey, result, 300);
     }
     return result;
   }
@@ -209,7 +198,6 @@ export function computeDebtForecast(
   >,
   sortedPeriods: (BillingPeriod & { creditCardId: string })[],
 ): { months: MonthBucket[]; totalDebtCLP: number; totalDebtUSD: number } {
-  // --- AGRUPACIÓN POR MES ---
   const findPeriodForQuota = (dueDate: string) => {
     const d = new Date(dueDate).getTime();
     for (const p of sortedPeriods) {
@@ -221,14 +209,15 @@ export function computeDebtForecast(
   };
 
   const bucketMap = new Map<string, MonthBucket>();
+
   for (const q of enrichedQuotas) {
-    // Aseguramos que dueDate es string (puede venir como Date)
     const dueDateStr =
-      typeof q.dueDate === "string"
+      typeof q.dueDate === 'string'
         ? q.dueDate
         : q.dueDate instanceof Date
         ? q.dueDate.toISOString()
         : String(q.dueDate);
+
     const period = findPeriodForQuota(dueDateStr);
     let key: string;
     let label: string;
@@ -237,14 +226,15 @@ export function computeDebtForecast(
       label = period.month;
     } else {
       const date = new Date(dueDateStr);
-      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = date.toLocaleDateString("es-CL", {
-        month: "long",
-        year: "numeric",
-        timeZone: "America/Santiago",
+      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('es-CL', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'America/Santiago',
       });
       label = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
     }
+
     if (!bucketMap.has(key)) {
       bucketMap.set(key, {
         key,
@@ -256,18 +246,19 @@ export function computeDebtForecast(
         periodsByCard: [],
       });
     }
+
     const bucket = bucketMap.get(key)!;
-    if (q.currency === "USD") bucket.totalUSD += q.amount;
+    if (q.currency === 'USD') bucket.totalUSD += q.amount;
     else bucket.totalCLP += q.amount;
     bucket.count += 1;
     bucket.details.push({
-      merchant: q.merchant || "Sin comercio",
+      merchant: q.merchant || 'Sin comercio',
       amount: q.amount,
       currency: q.currency,
       quotaNumber: q.quotaNumber!,
       totalQuotas: q.totalQuotas!,
       transactionId: q.transactionId,
-      creditCardId: q.creditCardId || "",
+      creditCardId: q.creditCardId || '',
     });
   }
 
@@ -300,10 +291,10 @@ export function computeDebtForecast(
   });
 
   const totalDebtCLP = enrichedQuotas
-    .filter((q) => q.currency !== "USD")
+    .filter((q) => q.currency !== 'USD')
     .reduce((s, q) => s + (q.amount || 0), 0);
   const totalDebtUSD = enrichedQuotas
-    .filter((q) => q.currency === "USD")
+    .filter((q) => q.currency === 'USD')
     .reduce((s, q) => s + (q.amount || 0), 0);
 
   return { months: sortedBuckets, totalDebtCLP, totalDebtUSD };

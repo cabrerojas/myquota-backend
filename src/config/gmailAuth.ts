@@ -1,6 +1,6 @@
 import { google, Auth } from "googleapis";
 import readline from "readline";
-import { db } from "@/config/firebase";
+import { getSupabaseAdmin } from "@/config/supabase";
 import { getEnv } from "@config/env.validation";
 
 const SCOPES = [
@@ -8,7 +8,6 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
 ];
 
-// Decodificar credenciales desde variable de entorno
 function getGoogleCredentials(): Auth.OAuth2Client {
   const env = getEnv();
   if (!env.CREDENTIALS_JSON) {
@@ -31,36 +30,47 @@ function getGoogleCredentials(): Auth.OAuth2Client {
   );
 }
 
-// Guardar el token de Gmail en Firestore
 export async function saveTokenToFirestore(
   userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tokens: any,
 ): Promise<void> {
-  await db
-    .collection("users")
-    .doc(userId)
-    .collection("emailTokens")
-    .doc("gmail")
-    .set({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiryDate: tokens.expiry_date,
-    });
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("user_tokens")
+    .upsert({
+      user_id: userId,
+      provider: "gmail",
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+    }, { onConflict: "user_id,provider" });
+
+  if (error) {
+    throw new Error(`Error saving Gmail token: ${error.message}`);
+  }
 }
 
-// Obtener el token de Gmail desde Firestore
 export async function getTokenFromFirestore(
   userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any | null> {
-  const tokenDoc = await db
-    .collection("users")
-    .doc(userId)
-    .collection("emailTokens")
-    .doc("gmail")
-    .get();
-  return tokenDoc.exists ? tokenDoc.data() : null;
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("user_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .single();
+
+  if (error?.code === "PGRST116") return null;
+  if (error) return null;
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiryDate: data.expires_at ? new Date(data.expires_at).getTime() : null,
+  };
 }
 
 // Autenticar con Gmail

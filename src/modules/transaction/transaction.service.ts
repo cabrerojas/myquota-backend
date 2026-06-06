@@ -1,26 +1,26 @@
 import { convertUtcToChileTime } from "@/shared/utils/date.utils";
 
-import { TransactionRepository } from "./transaction.repository";
+import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { Transaction } from "./transaction.model";
 import { BaseService } from "@/shared/classes/base.service";
 import { Quota } from "@/modules/quota/quota.model";
-import { BillingPeriodRepository } from "@modules/billingPeriod/billingPeriod.repository";
-import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
+import { BillingPeriodRepositorySupabase } from "@modules/billingPeriod/billingPeriod.repository.supabase";
+import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
 import { CategoryMatcher, EmailImportService } from "./emailImport.service";
 import { ManualTransactionService } from "./manualTransaction.service";
 
 export class TransactionService extends BaseService<Transaction> {
-  protected repository: TransactionRepository;
-  private billingPeriodRepository: BillingPeriodRepository;
-  private creditCardRepository: CreditCardRepository;
+  protected repository: TransactionRepositorySupabase;
+  private billingPeriodRepository: BillingPeriodRepositorySupabase;
+  private creditCardRepository: CreditCardRepositorySupabase;
   private emailImportService: EmailImportService;
   private categoryMatcher: CategoryMatcher;
   private manualTransactionService: ManualTransactionService;
 
   constructor(
-    repository: TransactionRepository,
-    billingPeriodRepository: BillingPeriodRepository,
-    creditCardRepository: CreditCardRepository,
+    repository: TransactionRepositorySupabase,
+    billingPeriodRepository: BillingPeriodRepositorySupabase,
+    creditCardRepository: CreditCardRepositorySupabase,
     categoryMatcher: CategoryMatcher,
   ) {
     super(repository);

@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { CreditCardController } from "./creditCard.controller";
-import { CreditCardRepository } from "./creditCard.repository";
+import { createCreditCardRepository } from "@/shared/classes/repository.factory";
 import { CreditCardService } from "./creditCard.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
@@ -24,7 +24,7 @@ const createCreditCardRouter = (): Router => {
       }
 
       try {
-        const repository = new CreditCardRepository(userId);
+        const repository = createCreditCardRepository(userId);
         const service = new CreditCardService(repository);
         const controller = new CreditCardController(service);
         res.locals.creditCardController = controller;

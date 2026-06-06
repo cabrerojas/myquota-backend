@@ -1,4 +1,4 @@
-import { PaginationParams, QueryResult } from "../classes/firestore.repository";
+import { PaginationParams, QueryResult } from "../classes/supabase.repository";
 
 export interface IBaseEntity {
     id: string;

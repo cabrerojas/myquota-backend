@@ -1,36 +1,26 @@
 // src/modules/quota/services/quota.service.ts
 import { Quota } from "./quota.model";
-import { QuotaRepository } from "./quota.repository";
+import { QuotaRepositorySupabase } from "./quota.repository.supabase";
 
 import { BaseService } from "@/shared/classes/base.service";
 import { RepositoryError } from "@/shared/errors/custom.error";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import { TransactionRepositorySupabase } from "@/modules/transaction/transaction.repository.supabase";
 
 export class QuotaService extends BaseService<Quota> {
-  protected transactionRepository: TransactionRepository;
+  protected transactionRepository: TransactionRepositorySupabase;
 
   constructor(
-    repository: QuotaRepository,
-    transactionRepository: TransactionRepository,
+    repository: QuotaRepositorySupabase,
+    transactionRepository: TransactionRepositorySupabase,
   ) {
     super(repository);
     this.transactionRepository = transactionRepository;
   }
 
-  // Otros métodos específicos del servicio
-
-  async getQuotasByTransaction(creditCardId: string, transactionId: string) {
-    return await this.transactionRepository.getQuotas(
-      creditCardId,
-      transactionId,
-    );
+  async getQuotasByTransaction(_creditCardId: string, transactionId: string) {
+    return await this.transactionRepository.getQuotas(transactionId);
   }
 
-  /**
-   * Divide una transacción en N cuotas mensuales.
-   * Elimina las cuotas existentes y crea N nuevas con montos divididos
-   * y dueDates mensuales a partir de la fecha de la transacción.
-   */
   async splitTransactionIntoQuotas(
     _creditCardId: string,
     transactionId: string,
@@ -99,7 +89,7 @@ export class QuotaService extends BaseService<Quota> {
           : quotaAmount;
 
       createdQuotas.push({
-        id: this.transactionRepository.repository.doc().id,
+        id: (crypto as { randomUUID: () => string }).randomUUID(),
         transactionId,
         amount,
         dueDate,

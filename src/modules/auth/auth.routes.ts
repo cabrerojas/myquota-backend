@@ -1,30 +1,27 @@
-import { Router } from "express";
-import { AuthController } from "./auth.controller";
-import { AuthService } from "./auth.service";
-import { UserRepository } from "@modules/user/user.repository";
-import { RevokedTokenRepository } from "./revokedToken.repository";
-import { validate } from "@shared/middlewares/validate.middleware";
-import { loginGoogleSchema, refreshTokenSchema } from "./auth.schemas";
+import { Router } from 'express';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { validate } from '@shared/middlewares/validate.middleware';
+import { loginGoogleSchema, refreshTokenSchema } from './auth.schemas';
 
 const createAuthRouter = (): Router => {
   const router = Router();
-  const userRepository = new UserRepository();
-  const revokedTokenRepository = new RevokedTokenRepository();
-  const authService = new AuthService(userRepository, revokedTokenRepository);
+  // AuthService now manages its own dependencies (SupabaseAuthService, RevokedTokenRepositorySupabase)
+  const authService = new AuthService();
   const controller = new AuthController(authService);
 
   router.post(
-    "/login/google",
+    '/login/google',
     validate(loginGoogleSchema),
     controller.loginWithGoogle.bind(controller),
   );
   router.post(
-    "/refresh",
+    '/refresh',
     validate(refreshTokenSchema),
     controller.refresh.bind(controller),
   );
   router.post(
-    "/logout",
+    '/logout',
     validate(refreshTokenSchema),
     controller.logout.bind(controller),
   );

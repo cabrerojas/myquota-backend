@@ -1,7 +1,6 @@
 import { validateEnv, getEnv } from "./config/env.validation";
 validateEnv();
 
-import "./config/firebase";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";

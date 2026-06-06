@@ -1,6 +1,6 @@
 import { IBaseEntity, IBaseRepository } from "../interfaces/base.repository";
 import { IBaseService } from "../interfaces/base.service";
-import { PaginationParams, QueryResult } from "./firestore.repository";
+import { PaginationParams, QueryResult } from "./supabase.repository";
 
 export abstract class BaseService<T extends IBaseEntity>
     implements IBaseService<T> {

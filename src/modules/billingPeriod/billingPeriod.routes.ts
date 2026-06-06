@@ -1,9 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import { createTransactionRepository, createBillingPeriodRepository } from "@/shared/classes/repository.factory";
 import { BillingPeriodController } from "./billingPeriod.controller";
-import { BillingPeriodRepository } from "./billingPeriod.repository";
 import { BillingPeriodService } from "./billingPeriod.service";
 import {
   createBillingPeriodSchema,
@@ -29,11 +28,8 @@ const createBillingPeriodRouter = (): Router => {
       }
 
       try {
-        const repository = new BillingPeriodRepository(userId, creditCardId);
-        const transactionRepository = new TransactionRepository(
-          userId,
-          creditCardId,
-        );
+        const repository = createBillingPeriodRepository(userId, creditCardId);
+        const transactionRepository = createTransactionRepository(userId, creditCardId);
         const service = new BillingPeriodService(
           repository,
           transactionRepository,

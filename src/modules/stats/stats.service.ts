@@ -1,21 +1,20 @@
-import { convertUtcToChileTime } from "@/shared/utils/date.utils";
+// src/modules/stats/stats.service.ts
+// Stats service — L1 memory cache + Supabase SQL queries.
+// USE_SUPABASE is always true in production — Firestore code has been removed.
+
 import {
   CacheService,
   CacheTTL,
   CacheKeys,
-} from "@/shared/services/cache.service";
-import { db } from "@/config/firebase";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { BillingPeriodRepository } from "@/modules/billingPeriod/billingPeriod.repository";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
-import { CategoryService } from "@/modules/category/category.service";
-import { WhatIfProduct } from "./stats.schemas";
-
-/**
- * Maximum age of a Firestore-persisted summary before forcing a full recompute.
- * Firestore summaries survive server restarts; memory cache does not.
- */
-const SUMMARY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+} from '@/shared/services/cache.service';
+import { TransactionRepositorySupabase } from '@/modules/transaction/transaction.repository.supabase';
+import { BillingPeriodRepositorySupabase } from '@/modules/billingPeriod/billingPeriod.repository.supabase';
+import {
+  executeDebtSummaryQuery,
+  executeMonthlyStatsQuery,
+  executeMonthlyQuotaSumQuery,
+} from '@/shared/lib/sql-queries';
+import { WhatIfProduct } from './stats.schemas';
 
 interface DebtSummary {
   totalCLP: number;
@@ -38,14 +37,16 @@ interface MonthlyStatEntry {
 }
 
 export class StatsService {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   constructor(
-    private transactionRepository: TransactionRepository,
-    private billingPeriodRepository: BillingPeriodRepository,
+    _transactionRepository: TransactionRepositorySupabase,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _billingPeriodRepository: BillingPeriodRepositorySupabase,
   ) {}
 
   /**
    * Obtiene la sumatoria de cuotas organizadas por períodos de facturación.
-   * Costo L3: 1 (billingPeriods) + 1 (transactions) + N_transactions (getQuotas) reads.
+   * Uses SQL query: single JOIN query replaces N+1 getQuotas loop.
    * Resultado cacheado en L1 memoria con TTL MEDIUM (2 min).
    */
   async getMonthlyQuotaSum(
@@ -58,114 +59,34 @@ export class StatsService {
       >(cacheKey);
     if (cached !== null) return cached;
 
-    try {
-      const [bpResult, txResult] = await Promise.all([
-        this.billingPeriodRepository.findAll(),
-        this.transactionRepository.findAll(),
-      ]);
+    const result = await this.getMonthlyQuotaSumSql(creditCardId);
 
-      const billingPeriods = bpResult.items;
-      const transactions = txResult.items;
+    CacheService.set(cacheKey, result, CacheTTL.MEDIUM);
+    return result;
+  }
 
-      if (!billingPeriods.length || !transactions.length) return [];
-
-      const formattedBillingPeriods = billingPeriods.map((period) => ({
-        periodKey: `${convertUtcToChileTime(
-          period.startDate,
-          "yyyy-MM-dd",
-        )} - ${convertUtcToChileTime(period.endDate, "yyyy-MM-dd")}`,
-        startDate: new Date(
-          convertUtcToChileTime(period.startDate, "yyyy-MM-dd HH:mm:ss"),
-        ),
-        endDate: new Date(
-          convertUtcToChileTime(period.endDate, "yyyy-MM-dd HH:mm:ss"),
-        ),
-      }));
-
-      const allQuotas = (
-        await Promise.all(
-          transactions.map((tx) =>
-            this.transactionRepository.getQuotas(creditCardId, tx.id),
-          ),
-        )
-      ).flat();
-
-      const periodSumMap: { [key: string]: { [currency: string]: number } } =
-        {};
-
-      for (const billingPeriod of formattedBillingPeriods) {
-        periodSumMap[billingPeriod.periodKey] = {};
-        const quotasInPeriod = allQuotas.filter((quota) => {
-          if (!quota.dueDate) return false;
-          const quotaDate = new Date(
-            convertUtcToChileTime(quota.dueDate, "yyyy-MM-dd HH:mm:ss"),
-          );
-          return (
-            quotaDate >= billingPeriod.startDate &&
-            quotaDate <= billingPeriod.endDate
-          );
-        });
-        for (const quota of quotasInPeriod) {
-          periodSumMap[billingPeriod.periodKey][quota.currency] =
-            (periodSumMap[billingPeriod.periodKey][quota.currency] ?? 0) +
-            quota.amount;
-        }
-      }
-
-      const result = Object.entries(periodSumMap).flatMap(
-        ([period, currencyMap]) =>
-          Object.entries(currencyMap).map(([currency, totalAmount]) => ({
-            period,
-            currency,
-            totalAmount,
-          })),
-      );
-
-      CacheService.set(cacheKey, result, CacheTTL.MEDIUM);
-
-      return result;
-    } catch (error) {
-      console.error(
-        "Error al obtener la sumatoria de las cuotas por período de facturación:",
-        error,
-      );
-      throw error;
-    }
+  /**
+   * getMonthlyQuotaSumSql — SQL path, single JOIN query replaces N+1 getQuotas loop.
+   */
+  private async getMonthlyQuotaSumSql(
+    creditCardId: string,
+  ): Promise<{ period: string; currency: string; totalAmount: number }[]> {
+    const rows = await executeMonthlyQuotaSumQuery(creditCardId);
+    return rows.map((row) => ({
+      period: row.period,
+      currency: row.currency,
+      totalAmount: row.total_amount,
+    }));
   }
 
   // ---------------------------------------------------------------------------
-  // Firestore materialized view document references
-  // Path: users/{userId}/summaries/debtSummary
-  //       users/{userId}/creditCards/{cardId}/summaries/monthlyStats
-  // ---------------------------------------------------------------------------
-
-  private static debtSummaryRef(userId: string) {
-    return db
-      .collection("users")
-      .doc(userId)
-      .collection("summaries")
-      .doc("debtSummary");
-  }
-
-  private static monthlyStatsRef(userId: string, creditCardId: string) {
-    return db
-      .collection("users")
-      .doc(userId)
-      .collection("creditCards")
-      .doc(creditCardId)
-      .collection("summaries")
-      .doc("monthlyStats");
-  }
-
-  // ---------------------------------------------------------------------------
-  // 3-level read: L1 memory → L2 Firestore summary (1 read) → L3 full compute
+  // getGlobalDebtSummary — L1 memory cache + SQL query
   // ---------------------------------------------------------------------------
 
   /**
    * Returns the global debt summary.
    * L1: in-memory cache (fast, resets on server restart)
-   * L2: Firestore materialized view (1 read, survives restarts)
-   * L3: full compute (~789 reads) — only on first load or stale data
+   * L3: SQL query via executeDebtSummaryQuery
    */
   static async getGlobalDebtSummary(userId: string): Promise<DebtSummary> {
     // L1: memory cache
@@ -173,180 +94,104 @@ export class StatsService {
     const cached = CacheService.get<DebtSummary>(memKey);
     if (cached !== null) return cached;
 
-    // L2: Firestore materialized view (1 read)
-    try {
-      const doc = await StatsService.debtSummaryRef(userId).get();
-      if (doc.exists) {
-        const raw = doc.data()!;
-        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        const summary = raw.data as DebtSummary;
-        // Migration guard: skip L2 if the persisted doc is missing monthlyBreakdown
-        // (written before this field was added). Forces a one-time L3 recompute.
-        if (
-          ageMs < SUMMARY_MAX_AGE_MS &&
-          Array.isArray(summary?.monthlyBreakdown)
-        ) {
-          CacheService.set(memKey, summary, CacheTTL.LONG);
-          return summary;
-        }
-      }
-    } catch (err) {
-      console.error("Failed to read debt summary from Firestore:", err);
-    }
-
-    // L3: full compute, then persist async
-    const result = await StatsService._computeDebtSummary(userId);
-    StatsService.debtSummaryRef(userId)
-      .set({ data: result, computedAt: new Date().toISOString() })
-      .catch((err) => console.error("Failed to persist debt summary:", err));
+    const result = await StatsService.computeDebtSummarySql(userId);
     CacheService.set(memKey, result, CacheTTL.LONG);
     return result;
   }
 
   // ---------------------------------------------------------------------------
-  // Pure compute methods (no caching — separated for reuse in triggerRecompute)
+  // Pure compute method — SQL path
   // ---------------------------------------------------------------------------
 
-  private static async _computeDebtSummary(
+  /**
+   * computeDebtSummarySql — SQL path, single query with JOINs.
+   */
+  private static async computeDebtSummarySql(
     userId: string,
   ): Promise<DebtSummary> {
-    const creditCardRepo = new CreditCardRepository(userId);
-    const ccResult = await creditCardRepo.findAll();
-    const cards = ccResult.items;
+    const rows = await executeDebtSummaryQuery(userId);
 
-    let totalCLP = 0;
-    let totalUSD = 0;
-    let pendingCount = 0;
-    let nextMonthCLP = 0;
-    let nextMonthUSD = 0;
-    const periodAmounts = new Map<
+    if (!rows || rows.length === 0) {
+      return {
+        totalCLP: 0,
+        totalUSD: 0,
+        pendingCount: 0,
+        monthsRemaining: 0,
+        nextMonthCLP: 0,
+        nextMonthUSD: 0,
+        monthlyBreakdown: [],
+      };
+    }
+
+    const totalsMap: { [currency: string]: number } = { CLP: 0, USD: 0 };
+    const monthBuckets = new Map<
       string,
       { CLP: number; USD: number; sortKey: number }
     >();
 
-    // Collect all billing periods across all cards
-    const allBillingPeriods: {
-      month: string;
-      startDate: string;
-      endDate: string;
-    }[] = [];
+    const now = new Date();
+    const currentCalKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    for (const card of cards) {
-      const bpRepo = new BillingPeriodRepository(userId, card.id);
-      const bpResult = await bpRepo.findAll();
-      const periods = bpResult.items;
-      allBillingPeriods.push(
-        ...periods.map((p) => ({
-          month: p.month,
-          startDate: String(p.startDate),
-          endDate: String(p.endDate),
-        })),
-      );
+    let pendingCount = 0;
+
+    for (const row of rows) {
+      pendingCount++;
+
+      const currency = row.currency === 'USD' ? 'USD' : 'CLP';
+      totalsMap[currency] = (totalsMap[currency] ?? 0) + row.total_amount;
+
+      // Month key from billing period or due_date
+      const bucketKey = row.month || row.due_date.substring(0, 7);
+
+      if (!monthBuckets.has(bucketKey)) {
+        monthBuckets.set(bucketKey, {
+          CLP: 0,
+          USD: 0,
+          sortKey: new Date(row.start_date || row.due_date).getTime(),
+        });
+      }
+
+      const bucket = monthBuckets.get(bucketKey)!;
+      if (currency === 'USD') {
+        bucket.USD += row.total_amount;
+      } else {
+        bucket.CLP += row.total_amount;
+      }
     }
 
-    // Find current billing period
-    const now = Date.now();
-    const currentPeriod = allBillingPeriods.find((p) => {
-      const start = new Date(p.startDate).getTime();
-      const end = new Date(p.endDate).getTime();
-      return now >= start && now <= end;
-    });
+    // Calculate next month totals from monthBuckets
+    let nextMonthCLP = 0;
+    let nextMonthUSD = 0;
+    for (const [key, bucket] of monthBuckets.entries()) {
+      if (key === currentCalKey) {
+        nextMonthCLP = bucket.CLP;
+        nextMonthUSD = bucket.USD;
+      }
+    }
 
-    // Process each card in parallel
-    await Promise.all(
-      cards.map(async (card) => {
-        const txRepo = new TransactionRepository(userId, card.id);
-        const txResult = await txRepo.findAll();
-        const transactions = txResult.items;
-
-        // Get all quotas for all transactions in parallel
-        const allQuotas = await Promise.all(
-          transactions.map((tx) => txRepo.getQuotas(card.id, tx.id)),
-        );
-
-        for (const quotas of allQuotas) {
-          for (const q of quotas) {
-            if (q.status !== "pending") continue;
-
-            pendingCount++;
-
-            // Find which billing period this quota belongs to
-            const dueTime = new Date(q.dueDate as unknown as string).getTime();
-            const periodMonth = allBillingPeriods.find((p) => {
-              return (
-                dueTime >= new Date(p.startDate).getTime() &&
-                dueTime <= new Date(p.endDate).getTime()
-              );
-            })?.month;
-
-            // Compute calendar month key for this quota
-            const dueDate = new Date(q.dueDate as unknown as string);
-            const calKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
-
-            const bucketKey = periodMonth ?? calKey;
-            const bucket = periodAmounts.get(bucketKey) ?? {
-              CLP: 0,
-              USD: 0,
-              sortKey: dueTime,
-            };
-            if (!periodAmounts.has(bucketKey)) {
-              periodAmounts.set(bucketKey, bucket);
-            }
-            if (q.currency === "USD") {
-              bucket.USD += q.amount;
-              totalUSD += q.amount;
-            } else {
-              bucket.CLP += q.amount;
-              totalCLP += q.amount;
-            }
-            // Keep sortKey as the earliest dueDate in this bucket
-            if (dueTime < bucket.sortKey) bucket.sortKey = dueTime;
-
-            // Next payment = quotas in current billing period or current calendar month
-            const nowDate = new Date();
-            const currentCalKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}`;
-            const isCurrentPeriod =
-              (currentPeriod && periodMonth === currentPeriod.month) ||
-              (!periodMonth && calKey === currentCalKey);
-
-            if (isCurrentPeriod) {
-              if (q.currency === "USD") {
-                nextMonthUSD += q.amount;
-              } else {
-                nextMonthCLP += q.amount;
-              }
-            }
-          }
-        }
-      }),
-    );
-
-    const monthlyBreakdown = Array.from(periodAmounts.entries())
+    const monthlyBreakdown = Array.from(monthBuckets.entries())
       .sort((a, b) => a[1].sortKey - b[1].sortKey)
       .map(([month, { CLP, USD }]) => ({ month, CLP, USD }));
 
-    const result: DebtSummary = {
-      totalCLP,
-      totalUSD,
+    return {
+      totalCLP: totalsMap.CLP ?? 0,
+      totalUSD: totalsMap.USD ?? 0,
       pendingCount,
-      monthsRemaining: periodAmounts.size,
+      monthsRemaining: monthBuckets.size,
       nextMonthCLP,
       nextMonthUSD,
       monthlyBreakdown,
     };
-
-    return result;
   }
 
   // ---------------------------------------------------------------------------
-  // getMonthlyStats — 3-level cached read
+  // getMonthlyStats — L1 memory cache + SQL query
   // ---------------------------------------------------------------------------
 
   /**
    * Returns monthly spending stats for a credit card.
    * L1: in-memory cache
-   * L2: Firestore materialized view (1 read, survives restarts)
-   * L3: full compute — only when cache is cold or stale
+   * L3: SQL query via executeMonthlyStatsQuery
    */
   async getMonthlyStats(
     userId: string,
@@ -357,269 +202,82 @@ export class StatsService {
     const cached = CacheService.get<MonthlyStatEntry[]>(memKey);
     if (cached !== null) return cached;
 
-    // L2: Firestore materialized view (1 read)
-    // schemaVersion: 3 = currency uses "USD" instead of "Dolar"
-    try {
-      const doc = await StatsService.monthlyStatsRef(
-        userId,
-        creditCardId,
-      ).get();
-      if (doc.exists) {
-        const raw = doc.data()!;
-        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        const isEmpty = Array.isArray(raw.data) && (raw.data as MonthlyStatEntry[]).length === 0;
-        const isStale =
-          raw.needsRecompute === true || ageMs >= SUMMARY_MAX_AGE_MS || isEmpty;
-        if (!isStale && raw.schemaVersion === 3) {
-          const stats = raw.data as MonthlyStatEntry[];
-          CacheService.set(memKey, stats, CacheTTL.LONG);
-          return stats;
-        }
-      }
-    } catch (err) {
-      console.error("Failed to read monthly stats from Firestore:", err);
-    }
-
-    // L3: full compute, then persist async
-    const result = await this._computeMonthlyStats(userId);
-    StatsService.monthlyStatsRef(userId, creditCardId)
-      .set({
-        data: result,
-        computedAt: new Date().toISOString(),
-        schemaVersion: 3,
-      })
-      .catch((err) => console.error("Failed to persist monthly stats:", err));
+    const result = await this.computeMonthlyStatsSql(userId, creditCardId);
     CacheService.set(memKey, result, CacheTTL.LONG);
     return result;
   }
 
-  private async _computeMonthlyStats(
-    userId: string,
-  ): Promise<MonthlyStatEntry[]> {
-    // Fetch categories once and build a lookup map by id
-    const categoryService = new CategoryService(userId);
-    const allCategories = await categoryService.getAllCategories();
-    const catMap = new Map(allCategories.map((c) => [c.id, c.name]));
-
-    // Obtener los BillingPeriods para la tarjeta de crédito
-    const bpResult = await this.billingPeriodRepository.findAll();
-    const billingPeriods = bpResult.items;
-
-    if (!billingPeriods.length) {
-      return [];
-    }
-
-    // Obtener todas las transacciones de la tarjeta de crédito
-    const txResult = await this.transactionRepository.findAll();
-    const transactions = txResult.items;
-
-    if (!transactions.length) {
-      return [];
-    }
-
-    // Crear un mapa de gastos por BillingPeriod
-    const billingStats: {
-      [month: string]: {
-        totalCLP: number;
-        totalUSD: number;
-        categoryBreakdown: {
-          [category: string]: { CLP: number; USD: number };
-        };
-      };
-    } = {};
-
-    for (const period of billingPeriods) {
-      billingStats[period.month] = {
-        totalCLP: 0,
-        totalUSD: 0,
-        categoryBreakdown: {},
-      };
-
-      const periodStartDate = convertUtcToChileTime(period.startDate);
-      const periodEndDate = convertUtcToChileTime(period.endDate);
-
-      transactions.forEach((transaction) => {
-        const transactionDate = convertUtcToChileTime(
-          transaction.transactionDate,
-        );
-
-        // Incluir la transacción si está dentro del BillingPeriod
-        if (
-          transactionDate >= periodStartDate &&
-          transactionDate <= periodEndDate
-        ) {
-          const currency = (
-            transaction.currency === "Dolar" ? "USD" : transaction.currency
-          ) as "CLP" | "USD";
-          const amount = transaction.amount;
-          const category =
-            (transaction.categoryId && catMap.get(transaction.categoryId)) ||
-            transaction.merchant ||
-            "Otros";
-
-          if (currency === "CLP") {
-            billingStats[period.month].totalCLP += amount;
-          } else if (currency === "USD") {
-            billingStats[period.month].totalUSD += amount;
-          }
-
-          // Asegurar que la categoría exista en el breakdown
-          if (!billingStats[period.month].categoryBreakdown[category]) {
-            billingStats[period.month].categoryBreakdown[category] = {
-              CLP: 0,
-              USD: 0,
-            };
-          }
-
-          // Sumar en la categoría correspondiente según la moneda
-          billingStats[period.month].categoryBreakdown[category][currency] +=
-            amount;
-        }
-      });
-    }
-
-    return Object.entries(billingStats)
-      .map(([month, data]) => ({
-        month,
-        totalCLP: data.totalCLP,
-        totalUSD: data.totalUSD,
-        categoryBreakdown: data.categoryBreakdown,
-      }))
-      .filter((entry) => entry.totalCLP > 0 || entry.totalUSD > 0);
-  }
-
-  // ---------------------------------------------------------------------------
-  private static uncategorizedCountRef(userId: string) {
-    return db
-      .collection("users")
-      .doc(userId)
-      .collection("summaries")
-      .doc("uncategorizedCount");
-  }
-
   /**
-   * L3: full compute of uncategorized transaction count (~N_creditCards reads).
-   * Separated for reuse in triggerRecompute.
+   * computeMonthlyStatsSql — SQL path, single JOIN query.
    */
-  static async _computeUncategorizedCount(userId: string): Promise<number> {
-    const ccRepo = new CreditCardRepository(userId);
-    const ccResult = await ccRepo.findAll();
-    const creditCards = ccResult.items;
-    let count = 0;
-    for (const card of creditCards) {
-      const txCollection = ccRepo.getTransactionsCollection(card.id);
-      const snapshot = await txCollection.where("deletedAt", "==", null).get();
-      for (const doc of snapshot.docs) {
-        if (!doc.data().categoryId) count++;
+  private async computeMonthlyStatsSql(
+    _userId: string,
+    creditCardId: string,
+  ): Promise<MonthlyStatEntry[]> {
+    const rows = await executeMonthlyStatsQuery(creditCardId);
+
+    if (!rows || rows.length === 0) return [];
+
+    // Group by billing period month
+    const statsMap = new Map<string, MonthlyStatEntry>();
+
+    for (const row of rows) {
+      if (!statsMap.has(row.month)) {
+        statsMap.set(row.month, {
+          month: row.month,
+          totalCLP: 0,
+          totalUSD: 0,
+          categoryBreakdown: {},
+        });
       }
+
+      const entry = statsMap.get(row.month)!;
+      const currency = row.currency === 'USD' ? 'USD' : 'CLP';
+
+      if (currency === 'CLP') {
+        entry.totalCLP += row.total_amount;
+      } else {
+        entry.totalUSD += row.total_amount;
+      }
+
+      if (!entry.categoryBreakdown[row.category_name]) {
+        entry.categoryBreakdown[row.category_name] = { CLP: 0, USD: 0 };
+      }
+      entry.categoryBreakdown[row.category_name][currency] += row.total_amount;
     }
-    return count;
+
+    return Array.from(statsMap.values());
   }
 
-  // triggerRecompute / triggerInvalidateOnly — called by controllers after writes
+  // ---------------------------------------------------------------------------
+  // triggerRecompute / triggerInvalidateOnly — L1 cache invalidation only
   // ---------------------------------------------------------------------------
 
   /**
-   * Invalidates L1 memory cache immediately, then fires async Firestore
-   * recomputes so the next GET serves fresh data from L2 (1 read).
-   *
-   * Use for structural writes: creating/deleting transactions, changing amounts.
-   * For category-only changes, use triggerInvalidateOnly instead.
+   * triggerRecompute — invalidates L1 memory cache.
+   * Debt forecast cache is also invalidated.
    *
    * @param userId       - The authenticated user
    * @param creditCardId - The card being modified (triggers monthly stats recompute)
    */
-  static triggerRecompute(userId: string, creditCardId?: string): void {
-    // Invalidate memory immediately so the next request doesn't serve stale L1 data
+  static triggerRecompute(userId: string, _creditCardId?: string): void {
+    // Invalidate L1 memory cache
     CacheService.invalidateByPrefix(CacheKeys.userPrefix(userId));
 
-    // Async recompute debt summary and persist to Firestore
-    StatsService._computeDebtSummary(userId)
-      .then((result) =>
-        StatsService.debtSummaryRef(userId).set({
-          data: result,
-          computedAt: new Date().toISOString(),
-        }),
-      )
-      .catch((err) => console.error("[recompute] debt summary failed:", err));
-
-    // Async recompute uncategorized count and persist to Firestore
-    StatsService._computeUncategorizedCount(userId)
-      .then((count) =>
-        StatsService.uncategorizedCountRef(userId).set({
-          data: count,
-          computedAt: new Date().toISOString(),
-        }),
-      )
-      .catch((err) =>
-        console.error("[recompute] uncategorized count failed:", err),
-      );
-
-    // Async recompute monthly stats for the specific card (if known)
-    if (creditCardId) {
-      // Invalidate monthlyQuotaSum — keyed by creditCardId (not user prefix)
-      CacheService.invalidate(CacheKeys.monthlyQuotaSum(creditCardId));
-
-      const txRepo = new TransactionRepository(userId, creditCardId);
-      const bpRepo = new BillingPeriodRepository(userId, creditCardId);
-      const svc = new StatsService(txRepo, bpRepo);
-      svc
-        ._computeMonthlyStats(userId)
-        .then((result) =>
-          StatsService.monthlyStatsRef(userId, creditCardId).set({
-            data: result,
-            computedAt: new Date().toISOString(),
-            schemaVersion: 3,
-          }),
-        )
-        .catch((err) =>
-          console.error("[recompute] monthly stats failed:", err),
-        );
-    }
+    // Debt forecast cache also needs invalidation
+    CacheService.invalidate(`debtForecast:${userId}`);
   }
 
   /**
-   * Lazy invalidation — marks affected Firestore summaries as stale with a
-   * single cheap write, then lets the next GET trigger a recompute naturally.
-   *
-   * Use for category-only changes. Assigning N categories = N × 2 cheap writes
-   * + 0 recomputes. The recompute fires exactly once, when the user navigates
-   * to the report that needs fresh data.
-   *
-   * Summaries affected by a category change:
-   *  - uncategorizedCount  → count decreases by 1 when a category is assigned
-   *  - monthlyStats        → categoryBreakdown changes (pie chart)
-   *
-   * Not affected (intentionally skipped):
-   *  - debtSummary  → amounts/quotas don't change when only categoryId changes
+   * triggerInvalidateOnly — L1 cache invalidation for category-only changes.
    *
    * @param userId       - The authenticated user
    * @param creditCardId - The card whose transaction was updated
    */
   static triggerInvalidateOnly(userId: string, creditCardId?: string): void {
-    // Invalidate L1 for the affected keys (always fast, 0 Firestore reads)
     CacheService.invalidate(CacheKeys.uncategorizedCount(userId));
     if (creditCardId) {
       CacheService.invalidate(CacheKeys.monthlyStats(userId, creditCardId));
-    }
-
-    // Mark uncategorizedCount L2 as stale → next read will recompute
-    StatsService.uncategorizedCountRef(userId)
-      .set({ needsRecompute: true }, { merge: true })
-      .catch((err) =>
-        console.error(
-          "[invalidate] uncategorizedCount stale mark failed:",
-          err,
-        ),
-      );
-
-    // Mark monthlyStats L2 as stale → next read will recompute
-    if (creditCardId) {
-      StatsService.monthlyStatsRef(userId, creditCardId)
-        .set({ needsRecompute: true }, { merge: true })
-        .catch((err) =>
-          console.error("[invalidate] monthlyStats stale mark failed:", err),
-        );
     }
   }
 }
@@ -635,10 +293,8 @@ interface QuotaInput {
 
 export class WhatIfService {
   async calculateWhatIf(products: WhatIfProduct[]) {
-    // Find max installments to limit projection
     const maxInstallments = Math.max(...products.map((p) => p.totalInstallments), 0);
 
-    // Build quotas with string dates only
     const allQuotas: QuotaInput[] = [];
 
     for (const p of products) {
@@ -658,7 +314,6 @@ export class WhatIfService {
       }
     }
 
-    // Simple projection: group by month key
     const bucketMap = new Map<
       string,
       { key: string; label: string; totalCLP: number; totalUSD: number; count: number }
@@ -666,11 +321,11 @@ export class WhatIfService {
 
     for (const q of allQuotas) {
       const date = new Date(q.dueDate);
-      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = date.toLocaleDateString("es-CL", {
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
+      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('es-CL', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
       });
       const label = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
@@ -679,7 +334,7 @@ export class WhatIfService {
       }
 
       const bucket = bucketMap.get(key)!;
-      if (q.currency === "USD") {
+      if (q.currency === 'USD') {
         bucket.totalUSD += q.amount;
       } else {
         bucket.totalCLP += q.amount;
@@ -687,13 +342,9 @@ export class WhatIfService {
       bucket.count += 1;
     }
 
-    // Sort buckets chronologically and limit to max installments
     const sortedMonths = Array.from(bucketMap.values()).sort((a, b) => a.key.localeCompare(b.key));
-
-    // Limit to the maximum number of months we need to show
     const limitedMonths = sortedMonths.slice(0, maxInstallments);
 
-    // Calculate totals
     let totalDebtCLP = 0;
     let totalDebtUSD = 0;
     for (const m of limitedMonths) {

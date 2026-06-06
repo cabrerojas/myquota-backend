@@ -1,14 +1,12 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { StatsController } from "./stats.controller";
 import { StatsService } from "./stats.service";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
+import { createTransactionRepository, createBillingPeriodRepository } from "@/shared/classes/repository.factory";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
-import { BillingPeriodRepository } from "../billingPeriod/billingPeriod.repository";
 
 const createStatsRouter = (): Router => {
   const router = Router();
 
-  // Ruta global: resumen de deuda (todas las tarjetas)
   router.get(
     "/stats/debt-summary",
     authenticate,
@@ -30,12 +28,12 @@ const createStatsRouter = (): Router => {
       }
 
       try {
-        const transactionRepository = new TransactionRepository(
+        const transactionRepository = createTransactionRepository(
           userId,
           creditCardId,
         );
 
-        const billingPeriodRepository = new BillingPeriodRepository(
+        const billingPeriodRepository = createBillingPeriodRepository(
           userId,
           creditCardId,
         );

@@ -1,5 +1,5 @@
 import { IBaseEntity } from "./base.repository";
-import { PaginationParams, QueryResult } from "../classes/firestore.repository";
+import { PaginationParams, QueryResult } from "../classes/supabase.repository";
 
 export interface IBaseService<T extends IBaseEntity> {
     create(data: Omit<T, keyof IBaseEntity>): Promise<T>;

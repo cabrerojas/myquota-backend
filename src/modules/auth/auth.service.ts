@@ -1,27 +1,47 @@
-import { OAuth2Client } from "google-auth-library";
-import * as jwt from "jsonwebtoken";
-import { UserRepository } from "@modules/user/user.repository";
-import { User } from "@modules/user/user.model";
-import { AuthError } from "@shared/errors/custom.error";
-import { saveTokenToFirestore } from "@/config/gmailAuth";
-import { RevokedTokenRepository } from "./revokedToken.repository";
-import { getEnv } from "@config/env.validation";
+// src/modules/auth/auth.service.ts
+// Authentication service — handles Google OAuth login, token refresh, and logout.
+// When USE_SUPABASE=true: uses Supabase Auth for identity verification.
+// When USE_SUPABASE=false: uses Firebase Admin + google-auth-library.
+
+import { OAuth2Client } from 'google-auth-library';
+import * as jwt from 'jsonwebtoken';
+import { getEnv } from '@config/env.validation';
+import { AuthError } from '@shared/errors/custom.error';
+import { SupabaseAuthService } from './SupabaseAuthService';
+import { RevokedTokenRepositorySupabase } from './revokedToken.repository.supabase';
 
 export class AuthService {
-  constructor(
-    private readonly userRepository: UserRepository,
-    private readonly revokedTokenRepository: RevokedTokenRepository,
-  ) {}
+  private supabaseAuth: SupabaseAuthService;
+  private revokedTokenRepository: RevokedTokenRepositorySupabase;
 
+  constructor() {
+    this.supabaseAuth = new SupabaseAuthService();
+    this.revokedTokenRepository = new RevokedTokenRepositorySupabase();
+  }
+
+  /**
+   * loginWithGoogle — verifies Google ID token and returns access + refresh tokens.
+   * When USE_SUPABASE=true: uses Supabase signInWithIdToken (provider: 'google').
+   * When USE_SUPABASE=false: uses OAuth2Client.verifyIdToken (Firebase path).
+   */
   async loginWithGoogle(
     idToken: string,
-    serverAuthCode?: string,
+    _serverAuthCode?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const env = getEnv();
-    const clientId = env.GOOGLE_CLIENT_ID;
 
-    // Verificar el `idToken` con Google
+    if (env.USE_SUPABASE === 'true') {
+      // Supabase path: signInWithIdToken handles Google identity verification
+      return this.supabaseAuth.signInWithGoogle(idToken).then((result) => ({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      }));
+    }
+
+    // Firestore path: use google-auth-library OAuth2Client
+    const clientId = env.GOOGLE_CLIENT_ID;
     const client = new OAuth2Client(clientId);
+
     let payload;
     try {
       const ticket = await client.verifyIdToken({
@@ -30,104 +50,71 @@ export class AuthService {
       });
       payload = ticket.getPayload();
     } catch (error) {
-      console.error("Error verificando idToken de Google:", error);
-      throw new AuthError("Token de Google inválido o expirado", 401);
+      console.error('Error verificando idToken de Google:', error);
+      throw new AuthError('Token de Google inválido o expirado', 401);
     }
 
     if (!payload || !payload.email) {
       throw new AuthError(
-        "Token no contiene información válida del usuario",
+        'Token no contiene información válida del usuario',
         401,
       );
     }
 
-    const { email, name, picture } = payload;
+    const { email } = payload;
 
-    // Buscar o crear usuario usando el repositorio
-    let user = await this.userRepository.findOne({ email });
-    let userId: string;
-
-    if (!user) {
-      const newUser: User = {
-        id: "",
-        email,
-        name: name || "",
-        picture: picture || undefined,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null,
-      };
-      user = await this.userRepository.create(newUser);
-      userId = user.id;
-    } else {
-      userId = user.id;
-
-      // Actualizar picture si cambió
-      if (picture && picture !== user.picture) {
-        await this.userRepository.update(userId, {
-          picture,
-          updatedAt: new Date(),
-        });
-      }
-    }
-
-    // Si hay serverAuthCode, intercambiar por tokens de Gmail y guardarlos
-    if (serverAuthCode) {
-      try {
-        const oAuth2Client = new OAuth2Client(
-          clientId,
-          env.GOOGLE_CLIENT_SECRET,
-          "", // redirect_uri vacío para mobile
-        );
-        const { tokens } = await oAuth2Client.getToken(serverAuthCode);
-
-        await saveTokenToFirestore(userId, tokens);
-      } catch (error) {
-        // No fallar el login si falla el guardado de tokens de Gmail
-        console.error("Error al guardar tokens de Gmail:", error);
-      }
-    }
-
-    // Generar access token (corto) y refresh token (largo)
+    // Issue JWTs (Firestore path — Supabase path returns its own tokens)
     const jwtSecret = env.JWT_SECRET as jwt.Secret;
-    const accessToken = jwt.sign({ userId, email, type: "access" }, jwtSecret, {
-      expiresIn: env.ACCESS_TOKEN_EXPIRES_IN,
-    } as jwt.SignOptions);
+    const accessToken = jwt.sign(
+      { userId: email, email, type: 'access' },
+      jwtSecret,
+      { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN } as jwt.SignOptions,
+    );
 
     const refreshSecret = env.JWT_REFRESH_SECRET as jwt.Secret;
-    const refreshToken = jwt.sign({ userId, type: "refresh" }, refreshSecret, {
-      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
-    } as jwt.SignOptions);
+    const refreshToken = jwt.sign(
+      { userId: email, type: 'refresh' },
+      refreshSecret,
+      { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions,
+    );
 
     return { accessToken, refreshToken };
   }
 
+  /**
+   * refreshTokens — validates refresh token and returns new access + refresh tokens.
+   * When USE_SUPABASE=true: uses SupabaseAuthService.refreshSession.
+   * When USE_SUPABASE=false: uses manual JWT verification + rotation.
+   */
   async refreshTokens(refreshToken: string) {
+    const env = getEnv();
+
+    if (env.USE_SUPABASE === 'true') {
+      return this.supabaseAuth.refreshSession(refreshToken);
+    }
+
+    // Firestore path: manual JWT verification
     try {
-      const env = getEnv();
       const refreshSecret = env.JWT_REFRESH_SECRET;
       const decoded = jwt.verify(refreshToken, refreshSecret) as {
         userId: string;
         type?: string;
         exp?: number;
       };
-      if (!decoded || decoded.type !== "refresh" || !decoded.userId) {
-        throw new Error("Refresh token inválido");
+
+      if (!decoded || decoded.type !== 'refresh' || !decoded.userId) {
+        throw new Error('Refresh token inválido');
       }
 
-      // Verificar si el token fue revocado
-      const isRevoked =
-        await this.revokedTokenRepository.isRevoked(refreshToken);
+      // Check if token is revoked
+      const isRevoked = await this.revokedTokenRepository.isRevokedToken(refreshToken);
       if (isRevoked) {
-        throw new Error("Refresh token revocado");
+        throw new Error('Refresh token revocado');
       }
-
-      const user = await this.userRepository.findById(decoded.userId);
-      if (!user) throw new Error("Usuario no encontrado");
 
       const jwtSecret = env.JWT_SECRET as jwt.Secret;
       const accessToken = jwt.sign(
-        { userId: user.id, email: user.email, type: "access" },
+        { userId: decoded.userId, email: decoded.userId, type: 'access' },
         jwtSecret,
         {
           expiresIn: env.ACCESS_TOKEN_EXPIRES_IN,
@@ -135,14 +122,14 @@ export class AuthService {
       );
 
       const newRefreshToken = jwt.sign(
-        { userId: user.id, type: "refresh" },
+        { userId: decoded.userId, type: 'refresh' },
         refreshSecret,
         {
           expiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
         } as jwt.SignOptions,
       );
 
-      // Revocar el refresh token anterior
+      // Revoke the old refresh token
       const expiresAt = decoded.exp
         ? new Date(decoded.exp * 1000)
         : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -150,27 +137,35 @@ export class AuthService {
 
       return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-      console.error("Error refreshing token:", error);
+      console.error('Error refreshing token:', error);
       throw error;
     }
   }
 
+  /**
+   * logout — revokes the refresh token by inserting its hash into revoked_tokens.
+   * Works with both Supabase and Firestore paths.
+   */
   async logout(refreshToken: string): Promise<void> {
     try {
       const refreshSecret = getEnv().JWT_REFRESH_SECRET;
-      const decoded = jwt.verify(refreshToken, refreshSecret) as {
-        exp?: number;
-      };
-      const expiresAt = decoded.exp
-        ? new Date(decoded.exp * 1000)
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      let expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      try {
+        const decoded = jwt.verify(refreshToken, refreshSecret) as {
+          exp?: number;
+        };
+        if (decoded.exp) {
+          expiresAt = new Date(decoded.exp * 1000);
+        }
+      } catch {
+        // Token invalid/expired — use default expiry
+      }
+
       await this.revokedTokenRepository.revoke(refreshToken, expiresAt);
-    } catch {
-      // Si el token ya expiró o es inválido, no importa — igualmente revocamos el hash
-      await this.revokedTokenRepository.revoke(
-        refreshToken,
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      );
+    } catch (error) {
+      console.error('[AuthService] logout error:', error);
+      // Don't fail logout if revocation fails — token may already be expired
     }
   }
 }

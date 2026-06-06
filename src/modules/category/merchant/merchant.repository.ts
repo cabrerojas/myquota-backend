@@ -1,44 +1,70 @@
 import { IBaseEntity } from "@shared/interfaces/base.repository";
 import { MerchantPattern } from "./merchant.model";
-import { db } from "@/config/firebase";
+import { getSupabaseAdmin } from "@/config/supabase";
+import { RepositoryError } from "@/shared/errors/custom.error";
 
 export class MerchantPatternRepository {
   constructor(private readonly categoryId: string) {}
 
-  getCollection() {
-    return db
-      .collection("categories")
-      .doc(this.categoryId)
-      .collection("merchants");
+  private client() {
+    return getSupabaseAdmin();
   }
 
   async addPattern(
     pattern: Omit<MerchantPattern, keyof IBaseEntity>,
   ): Promise<MerchantPattern> {
-    // Evitar duplicados: buscar patrones iguales (case-insensitive) antes de crear
-    const existingSnapshot = await this.getCollection().get();
-    for (const doc of existingSnapshot.docs) {
-      const data = doc.data() as MerchantPattern;
-      if (
-        data.pattern &&
-        data.pattern.toLowerCase() === pattern.pattern.toLowerCase()
-      ) {
-        return { ...data } as MerchantPattern;
-      }
+    const supabase = this.client();
+
+    const { data: existing } = await supabase
+      .from("merchant_patterns")
+      .select("*")
+      .eq("category_id", this.categoryId)
+      .ilike("pattern", pattern.pattern || "")
+      .is("deleted_at", null)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      const row = existing[0];
+      return {
+        id: row.id as string,
+        name: row.name as string,
+        pattern: row.pattern as string,
+        createdBy: row.created_by as string,
+        createdAt: new Date(row.created_at as string),
+        updatedAt: new Date(row.updated_at as string),
+        deletedAt: null,
+      } as MerchantPattern;
     }
 
-    const now = new Date();
-    const docRef = await this.getCollection().add({
-      ...pattern,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    });
+    const now = new Date().toISOString();
+    const id = (crypto as { randomUUID: () => string }).randomUUID();
+
+    const { data, error } = await supabase
+      .from("merchant_patterns")
+      .insert({
+        id,
+        category_id: this.categoryId,
+        name: pattern.name,
+        pattern: pattern.pattern,
+        created_by: pattern.createdBy,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new RepositoryError(`Error adding merchant pattern: ${error.message}`, 500);
+    }
+
     return {
-      id: docRef.id,
-      ...pattern,
-      createdAt: now,
-      updatedAt: now,
+      id: data.id as string,
+      name: data.name as string,
+      pattern: data.pattern as string,
+      createdBy: data.created_by as string,
+      createdAt: new Date(data.created_at as string),
+      updatedAt: new Date(data.updated_at as string),
       deletedAt: null,
     } as MerchantPattern;
   }
@@ -46,18 +72,29 @@ export class MerchantPatternRepository {
   async findMatchingPattern(
     merchantName: string,
   ): Promise<MerchantPattern | null> {
-    const snapshot = await this.getCollection().get();
-    for (const doc of snapshot.docs) {
-      const data = doc.data() as MerchantPattern;
-      if (merchantName.toUpperCase().includes(data.pattern.toUpperCase())) {
+    const supabase = this.client();
+
+    const { data, error } = await supabase
+      .from("merchant_patterns")
+      .select("*")
+      .eq("category_id", this.categoryId)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new RepositoryError(`Error finding merchant pattern: ${error.message}`, 500);
+    }
+
+    for (const row of data as Record<string, unknown>[]) {
+      const pattern = row.pattern as string;
+      if (merchantName.toUpperCase().includes(pattern.toUpperCase())) {
         return {
-          id: doc.id,
-          name: data.name,
-          pattern: data.pattern,
-          createdBy: data.createdBy,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt || data.createdAt,
-          deletedAt: data.deletedAt ?? null,
+          id: row.id as string,
+          name: row.name as string,
+          pattern: row.pattern as string,
+          createdBy: row.created_by as string,
+          createdAt: new Date(row.created_at as string),
+          updatedAt: new Date(row.updated_at as string),
+          deletedAt: null,
         } as MerchantPattern;
       }
     }
@@ -65,20 +102,26 @@ export class MerchantPatternRepository {
   }
 
   async getAllPatterns(): Promise<MerchantPattern[]> {
-    const snapshot = await this.getCollection().get();
-    return snapshot.docs.map((doc) => {
-      const data = doc.data() as Partial<MerchantPattern>;
-      const { name, pattern, createdBy, createdAt, updatedAt, deletedAt } =
-        data;
-      return {
-        id: doc.id,
-        name: name || "",
-        pattern: pattern || "",
-        createdBy: createdBy || "",
-        createdAt: createdAt || new Date(),
-        updatedAt: updatedAt || createdAt || new Date(),
-        deletedAt: deletedAt ?? null,
-      } as MerchantPattern;
-    });
+    const supabase = this.client();
+
+    const { data, error } = await supabase
+      .from("merchant_patterns")
+      .select("*")
+      .eq("category_id", this.categoryId)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new RepositoryError(`Error getting merchant patterns: ${error.message}`, 500);
+    }
+
+    return (data as Record<string, unknown>[]).map((row) => ({
+      id: row.id as string,
+      name: (row.name as string) || "",
+      pattern: (row.pattern as string) || "",
+      createdBy: (row.created_by as string) || "",
+      createdAt: row.created_at ? new Date(row.created_at as string) : new Date(),
+      updatedAt: row.updated_at ? new Date(row.updated_at as string) : new Date(),
+      deletedAt: null,
+    } as MerchantPattern));
   }
 }

@@ -7,6 +7,7 @@ export class Category implements IBaseEntity {
   color?: string;
   icon?: string;
   userId?: string; // undefined for global categories
+  isGlobal?: boolean; // true = shared across all users
   createdAt!: Date;
   updatedAt!: Date;
   deletedAt?: Date | null;

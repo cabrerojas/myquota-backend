@@ -6,20 +6,21 @@ import {
   CacheTTL,
   CacheKeys,
 } from "@/shared/services/cache.service";
-import { PaginationParams, QueryResult } from "@/shared/classes/firestore.repository";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
-import { BillingPeriodRepository } from "./billingPeriod.repository";
+import { PaginationParams, QueryResult } from "@/shared/classes/supabase.repository";
+import { TransactionRepositorySupabase } from "@/modules/transaction/transaction.repository.supabase";
+import { BillingPeriodRepositorySupabase } from "./billingPeriod.repository.supabase";
+import { QuotaRepositorySupabase } from "@/modules/quota/quota.repository.supabase";
 import { BillingPeriod } from "./billingPeriod.model";
 
 export class BillingPeriodService extends BaseService<BillingPeriod> {
-  protected repository: BillingPeriodRepository;
-  private transactionRepository: TransactionRepository | null = null;
+  protected repository: BillingPeriodRepositorySupabase;
+  private transactionRepository: TransactionRepositorySupabase | null = null;
   private creditCardId: string;
   private userId?: string;
 
   constructor(
-    repository: BillingPeriodRepository,
-    transactionRepository?: TransactionRepository,
+    repository: BillingPeriodRepositorySupabase,
+    transactionRepository?: TransactionRepositorySupabase,
     creditCardId?: string,
     userId?: string,
   ) {
@@ -44,11 +45,11 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
       return this.repository.findAll(undefined, pagination);
     }
 
-    if (!this.userId || !this.creditCardId) {
+    if (!this.creditCardId) {
       return super.findAll();
     }
 
-    const cacheKey = CacheKeys.billingPeriods(this.userId, this.creditCardId);
+    const cacheKey = CacheKeys.billingPeriods(this.userId!, this.creditCardId);
     const cached = CacheService.get<BillingPeriod[]>(cacheKey);
     if (cached !== null) {
       return {
@@ -150,7 +151,6 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
       throw new Error("TransactionRepository no disponible");
     }
 
-    // Obtener el período
     const period = await this.findById(billingPeriodId);
     if (!period) {
       throw new Error("Período de facturación no encontrado");
@@ -159,7 +159,6 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     const startDate = new Date(period.startDate).getTime();
     const endDate = new Date(period.endDate).getTime();
 
-    // Obtener todas las transacciones de la tarjeta
     const txResult = await this.transactionRepository.findAll();
     const transactions = txResult.items;
 
@@ -167,29 +166,19 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     let totalAmount = 0;
     const paymentDate = new Date().toISOString();
 
-    // Para cada transacción, buscar cuotas pendientes en el rango
-    for (const tx of transactions) {
-      const quotas = await this.transactionRepository.getQuotas(
-        this.creditCardId,
-        tx.id,
-      );
+    const quotaRepo = new QuotaRepositorySupabase();
 
-      const pendingInRange = quotas.filter((q) => {
+    for (const tx of transactions) {
+      const quotas = await this.transactionRepository.getQuotas(tx.id);
+
+      const pendingInRange = quotas.filter((q: { status: string; dueDate: Date | string }) => {
         if (q.status !== "pending") return false;
         const dueTime = new Date(q.dueDate).getTime();
         return dueTime >= startDate && dueTime <= endDate;
       });
 
-      // Marcar cada cuota como pagada
       for (const quota of pendingInRange) {
-        const quotaRef = this.transactionRepository
-          .getQuotasCollection(this.creditCardId, tx.id)
-          .doc(quota.id);
-        await quotaRef.update({
-          status: "paid",
-          paymentDate: paymentDate,
-          updatedAt: paymentDate,
-        });
+        await quotaRepo.markAsPaid(quota.id, new Date(paymentDate));
         paidCount++;
         totalAmount += quota.amount;
       }

@@ -1,8 +1,8 @@
 import { MerchantPatternService } from "./merchant/merchant.service";
 import { BaseService } from "@/shared/classes/base.service";
 import { Category } from "./category.model";
-import { CategoryRepository } from "./category.repository";
-import { CreditCardRepository } from "@/modules/creditCard/creditCard.repository";
+import { CategoryRepositorySupabase } from "./category.repository.supabase";
+import { CreditCardRepositorySupabase } from "@/modules/creditCard/creditCard.repository.supabase";
 import {
   CacheService,
   CacheTTL,
@@ -10,16 +10,16 @@ import {
 } from "@/shared/services/cache.service";
 
 export class CategoryService extends BaseService<Category> {
-  private globalRepository: CategoryRepository;
-  private userRepository?: CategoryRepository;
+  private globalRepository: CategoryRepositorySupabase;
+  private userRepository?: CategoryRepositorySupabase;
   private userId?: string;
 
   constructor(userId?: string) {
-    super(new CategoryRepository(userId));
-    this.globalRepository = new CategoryRepository();
+    super(new CategoryRepositorySupabase(userId));
+    this.globalRepository = new CategoryRepositorySupabase();
     this.userId = userId;
     if (userId) {
-      this.userRepository = new CategoryRepository(userId);
+      this.userRepository = new CategoryRepositorySupabase(userId);
     }
   }
 
@@ -149,7 +149,7 @@ export class CategoryService extends BaseService<Category> {
       throw new Error("Categoría global no encontrada");
     }
 
-    const userRepo = new CategoryRepository(userId);
+    const userRepo = new CategoryRepositorySupabase(userId);
     const created = await userRepo.create({
       name: category.name,
       color: category.color,
@@ -291,7 +291,7 @@ export class CategoryService extends BaseService<Category> {
     userId: string,
     merchantName: string,
   ): Promise<Array<{ categoryId: string; count: number }>> {
-    const creditCardRepo = new CreditCardRepository(userId);
+    const creditCardRepo = new CreditCardRepositorySupabase(userId);
     const ccResult = await creditCardRepo.findAll();
     const creditCards = ccResult.items;
     const categoryCount = new Map<string, number>();
@@ -299,18 +299,16 @@ export class CategoryService extends BaseService<Category> {
     const normalizedMerchant = merchantName.trim().toUpperCase();
 
     for (const cc of creditCards) {
-      const txCollection = creditCardRepo.getTransactionsCollection(cc.id);
-      const snapshot = await txCollection.where("deletedAt", "==", null).get();
+      const transactions = await creditCardRepo.getTransactions(cc.id);
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
+      for (const tx of transactions) {
         if (
-          data.categoryId &&
-          data.merchant &&
-          data.merchant.trim().toUpperCase() === normalizedMerchant
+          tx.categoryId &&
+          tx.merchant &&
+          tx.merchant.trim().toUpperCase() === normalizedMerchant
         ) {
-          const prev = categoryCount.get(data.categoryId) ?? 0;
-          categoryCount.set(data.categoryId, prev + 1);
+          const prev = categoryCount.get(tx.categoryId) ?? 0;
+          categoryCount.set(tx.categoryId, prev + 1);
         }
       }
     }

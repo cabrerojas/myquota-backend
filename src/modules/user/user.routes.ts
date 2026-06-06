@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { UserController } from "./user.controller";
-import { UserRepository } from "./user.repository";
+import { createUserRepository } from "@/shared/classes/repository.factory";
 import { UserService } from "./user.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
@@ -8,7 +8,7 @@ import { updateUserSchema } from "./user.schemas";
 
 const createUserRouter = (): Router => {
   const router = Router();
-  const repository = new UserRepository();
+  const repository = createUserRepository();
   const service = new UserService(repository);
   const controller = new UserController(service);
 

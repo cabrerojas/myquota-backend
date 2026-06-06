@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { QuotaController } from "./quota.controller";
-import { QuotaRepository } from "./quota.repository";
+import { createQuotaRepository, createTransactionRepository } from "@/shared/classes/repository.factory";
 import { QuotaService } from "./quota.service";
-import { TransactionRepository } from "@/modules/transaction/transaction.repository";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
 import {
@@ -29,15 +28,11 @@ const createQuotaRouter = (): Router => {
       }
 
       try {
-        const transactionRepository = new TransactionRepository(
+        const transactionRepository = createTransactionRepository(
           userId,
           creditCardId,
         );
-        const quotaRepository = new QuotaRepository(
-          userId,
-          creditCardId,
-          transactionId,
-        );
+        const quotaRepository = createQuotaRepository();
         const service = new QuotaService(
           quotaRepository,
           transactionRepository,

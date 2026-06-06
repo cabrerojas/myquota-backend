@@ -1,29 +1,22 @@
 import { BaseService } from "@/shared/classes/base.service";
 import { CreditCard } from "./creditCard.model";
-import { CreditCardRepository } from "./creditCard.repository";
+import { CreditCardRepositorySupabase } from "./creditCard.repository.supabase";
 import {
   CacheService,
   CacheTTL,
   CacheKeys,
 } from "@/shared/services/cache.service";
-import { db } from "@/config/firebase";
 import { IBaseEntity } from "@/shared/interfaces/base.repository";
-import { PaginationParams, QueryResult } from "@/shared/classes/firestore.repository";
+import { PaginationParams, QueryResult } from "@/shared/classes/supabase.repository";
 
 export class CreditCardService extends BaseService<CreditCard> {
-  // Cambiar el tipo del repository para acceder a los métodos específicos
-  protected repository: CreditCardRepository;
+  protected repository: CreditCardRepositorySupabase;
   private userId?: string;
 
-  constructor(repository: CreditCardRepository) {
+  constructor(repository: CreditCardRepositorySupabase) {
     super(repository);
-    // Guardar la referencia al repository tipado
     this.repository = repository;
-    // Extract userId from repository path: ["users", userId, "creditCards"]
-    const path = (repository as unknown as { repository: { path: string[] } }).repository?.path;
-    if (path && path.length >= 2) {
-      this.userId = path[1];
-    }
+    this.userId = (repository as unknown as { userId?: string }).userId;
   }
 
   /**
@@ -104,55 +97,20 @@ export class CreditCardService extends BaseService<CreditCard> {
    * L3: full compute — 1 read per credit card (N reads)
    */
   async getUncategorizedCount(userId: string): Promise<number> {
-    // L1: memoria
     const cacheKey = CacheKeys.uncategorizedCount(userId);
     const cached = CacheService.get<number>(cacheKey);
     if (cached !== null) return cached;
 
-    // L2: Firestore summary (1 read)
-    try {
-      const doc = await db
-        .collection("users")
-        .doc(userId)
-        .collection("summaries")
-        .doc("uncategorizedCount")
-        .get();
-      if (doc.exists) {
-        const raw = doc.data()!;
-        const ageMs = Date.now() - new Date(raw.computedAt as string).getTime();
-        const isStale = raw.needsRecompute === true || ageMs >= 30 * 60 * 1000;
-        if (!isStale) {
-          const count = raw.data as number;
-          CacheService.set(cacheKey, count, CacheTTL.MEDIUM);
-          return count;
-        }
-      }
-    } catch (err) {
-      console.error("[uncategorizedCount] L2 read failed:", err);
-    }
-
-    // L3: cómputo completo (~N_creditCards reads)
     const ccResult = await this.repository.findAll();
     const creditCards = ccResult.items;
     let count = 0;
 
     for (const card of creditCards) {
-      const txCollection = this.repository.getTransactionsCollection(card.id);
-      const snapshot = await txCollection.where("deletedAt", "==", null).get();
-      for (const doc of snapshot.docs) {
-        if (!doc.data().categoryId) count++;
+      const transactions = await this.repository.getTransactions(card.id);
+      for (const tx of transactions) {
+        if (!tx.categoryId) count++;
       }
     }
-
-    // Persist back to L2 so the stale marker is cleared and the next read is fast.
-    db.collection("users")
-      .doc(userId)
-      .collection("summaries")
-      .doc("uncategorizedCount")
-      .set({ data: count, computedAt: new Date().toISOString() })
-      .catch((err) =>
-        console.error("[uncategorizedCount] L2 persist failed:", err),
-      );
 
     CacheService.set(cacheKey, count, CacheTTL.MEDIUM);
     return count;

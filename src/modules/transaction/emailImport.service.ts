@@ -6,8 +6,8 @@ import { chunkArray } from "@/shared/utils/array.utils";
 import { parseFirebaseDate } from "@/shared/utils/date.utils";
 import { getEnv } from "@config/env.validation";
 
-import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
-import { TransactionRepository } from "./transaction.repository";
+import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
+import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { Transaction } from "./transaction.model";
 import { AuthError } from "@shared/errors/custom.error";
 
@@ -18,7 +18,7 @@ export type CategoryMatcher = {
 export class EmailImportService {
   async fetchBankEmails(
     userId: string,
-    creditCardRepository: CreditCardRepository,
+    creditCardRepository: CreditCardRepositorySupabase,
     categoryService: CategoryMatcher,
   ): Promise<{ importedCount: number }> {
     const tokenData = await getTokenFromFirestore(userId);
@@ -104,10 +104,10 @@ export class EmailImportService {
 
     const ccResult = await creditCardRepository.findAll();
     const creditCards = ccResult.items;
-    const transactionRepositoryByCard = new Map<string, TransactionRepository>(
+    const transactionRepositoryByCard = new Map<string, TransactionRepositorySupabase>(
       creditCards.map((card) => [
         card.id,
-        new TransactionRepository(userId, card.id),
+        new TransactionRepositorySupabase(card.id),
       ]),
     );
 
@@ -220,8 +220,8 @@ export class EmailImportService {
   }
 
   private async saveBatch(
-    creditCardRepository: CreditCardRepository,
-    transactionRepositoryByCard: Map<string, TransactionRepository>,
+    creditCardRepository: CreditCardRepositorySupabase,
+    transactionRepositoryByCard: Map<string, TransactionRepositorySupabase>,
     transactions: Transaction[],
   ): Promise<number> {
     const ccResult = await creditCardRepository.findAll();

@@ -1,9 +1,9 @@
-import { UserRepository } from "./user.repository";
+import { UserRepositorySupabase } from "./user.repository.supabase";
 import { User } from "./user.model";
 import { BaseService } from "@/shared/classes/base.service";
 
 export class UserService extends BaseService<User> {
-  constructor(protected repository: UserRepository) {
+  constructor(protected repository: UserRepositorySupabase) {
     super(repository);
   }
 
