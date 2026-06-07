@@ -68,12 +68,17 @@ export class SupabaseAuthService {
       token: idToken,
     });
 
-    if (error || !data.user) {
+    if (error || !data.user || !data.session) {
       console.error('[SupabaseAuthService] Google signInWithIdToken error:', error?.message);
       throw new AuthError('Token de Google inválido o expirado', 401);
     }
 
-    return this.buildTokens(data.user.id, data.user.email ?? '');
+    // Use Supabase session tokens directly
+    return {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      userId: data.user.id,
+    };
   }
 
 /**
@@ -98,27 +103,15 @@ export class SupabaseAuthService {
     });
 
     if (error || !data.user || !data.session) {
+      console.error('[SupabaseAuthService] refreshSession error:', error?.message);
       throw new AuthError('Refresh token inválido o expirado', 401);
     }
 
-    const env = getEnv();
-    const jwtSecret = env.JWT_SECRET as jwt.Secret;
-    const refreshSecret = env.JWT_REFRESH_SECRET as jwt.Secret;
-
-    // Issue custom JWTs wrapping the Supabase session
-    const newAccessToken = jwt.sign(
-      { userId: data.user.id, email: data.user.email, type: 'access' },
-      jwtSecret,
-      { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN } as jwt.SignOptions,
-    );
-
-    const newRefreshToken = jwt.sign(
-      { userId: data.user.id, type: 'refresh' },
-      refreshSecret,
-      { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions,
-    );
-
-    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+    // Return Supabase session tokens directly
+    return {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+    };
   }
 
   /**
