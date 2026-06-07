@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
 
-  # Allow manual deployment from GitHub Actions UI
   workflow_dispatch:
     inputs:
       skip_tests:
@@ -52,21 +51,15 @@ jobs:
 
             APP_DIR="/opt/myquota-backend"
 
-            echo "── Pulling latest code from main ──"
-            cd "$APP_DIR"
-            git fetch origin main
-            git checkout main
-            git pull origin main
-
-            echo "── Installing dependencies ──"
-            npm ci
-
-            echo "── Building ──"
-            npm run build
-
-            echo "── Restarting PM2 ──"
+            echo "── Stopping PM2 ──"
             pm2 stop myquota-backend 2>/dev/null || true
             pm2 delete myquota-backend 2>/dev/null || true
+
+            echo "── Syncing dist folder ──"
+            rsync -avz --delete -e "ssh -p 22022" /github/workspace/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$APP_DIR/dist/
+
+            echo "── Starting PM2 ──"
+            cd $APP_DIR
             pm2 start ecosystem.config.js --env production
             pm2 save
 
@@ -82,7 +75,6 @@ jobs:
               exit 1
             fi
 
-  # ─── Notify on failure ────────────────────────────────────────────────────
   failure:
     runs-on: ubuntu-latest
     needs: [deploy]
