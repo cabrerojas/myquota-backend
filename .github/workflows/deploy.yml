@@ -58,7 +58,7 @@ jobs:
             ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && git fetch origin main && git reset --hard origin/main"
 
             echo "── Installing deps on VPS ──"
-            ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && npm ci && npm run build"
+            ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && npm ci && NODE_OPTIONS="--max-old-space-size=1024" npm run build"
 
             echo "── Starting PM2 ──"
             ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && pm2 start ecosystem.config.js --env production && pm2 save"
