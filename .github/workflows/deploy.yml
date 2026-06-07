@@ -36,9 +36,6 @@ jobs:
         if: github.event.inputs.skip_tests != 'true'
         run: npm test
 
-      - name: Build
-        run: npm run build
-
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -46,22 +43,26 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22022
+          envs:
+            NODE_OPTIONS
           script: |
             set -e
 
             APP_DIR="/opt/myquota-backend"
+            NODE_OPTIONS="--max-old-space-size=2048"
 
             echo "── Stopping PM2 ──"
             pm2 stop myquota-backend 2>/dev/null || true
             pm2 delete myquota-backend 2>/dev/null || true
 
-            echo "── Syncing dist folder ──"
-            rsync -avz --delete -e "ssh -p 22022" /github/workspace/dist/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$APP_DIR/dist/
+            echo "── Syncing source code ──"
+            rsync -avz --delete -e "ssh -p 22022" /github/workspace/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$APP_DIR/ --exclude='.git' --exclude='node_modules' --exclude='dist' --exclude='.env'
+
+            echo "── Installing deps on VPS ──"
+            ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && npm ci && npm run build"
 
             echo "── Starting PM2 ──"
-            cd $APP_DIR
-            pm2 start ecosystem.config.js --env production
-            pm2 save
+            ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd $APP_DIR && pm2 start ecosystem.config.js --env production && pm2 save"
 
             echo "── Health check ──"
             sleep 5
@@ -71,7 +72,7 @@ jobs:
               echo "── Deployment successful ──"
             else
               echo "── Deployment may have issues — check PM2 logs ──"
-              pm2 logs myquota-backend --lines 20 --nostream
+              ssh -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "pm2 logs myquota-backend --lines 20 --nostream"
               exit 1
             fi
 
