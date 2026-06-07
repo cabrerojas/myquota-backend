@@ -79,7 +79,7 @@ export async function executeDebtSummaryQuery(
   // Step 1: Get user's credit card IDs
   const { data: cards, error: cardsError } = await supabase
     .from('credit_cards')
-    .select('id, currency')
+    .select('id')
     .eq('user_id', userId)
     .is('deleted_at', null);
 
