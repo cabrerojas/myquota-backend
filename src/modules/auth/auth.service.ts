@@ -9,14 +9,18 @@ import { getEnv } from '@config/env.validation';
 import { AuthError } from '@shared/errors/custom.error';
 import { SupabaseAuthService } from './SupabaseAuthService';
 import { RevokedTokenRepositorySupabase } from './revokedToken.repository.supabase';
+import { UserTokenRepository } from './userToken.repository';
+import { google } from 'googleapis';
 
 export class AuthService {
   private supabaseAuth: SupabaseAuthService;
   private revokedTokenRepository: RevokedTokenRepositorySupabase;
+  private userTokenRepository: UserTokenRepository;
 
   constructor() {
     this.supabaseAuth = new SupabaseAuthService();
     this.revokedTokenRepository = new RevokedTokenRepositorySupabase();
+    this.userTokenRepository = new UserTokenRepository();
   }
 
   /**
@@ -26,16 +30,28 @@ export class AuthService {
    */
   async loginWithGoogle(
     idToken: string,
-    _serverAuthCode?: string,
+    serverAuthCode?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const env = getEnv();
 
     if (env.USE_SUPABASE === 'true') {
       // Supabase path: signInWithIdToken handles Google identity verification
-      return this.supabaseAuth.signInWithGoogle(idToken).then((result) => ({
+      const result = await this.supabaseAuth.signInWithGoogle(idToken);
+
+      // If serverAuthCode is provided, exchange it for Gmail tokens and save them
+      if (serverAuthCode) {
+        try {
+          await this.saveGmailTokens(result.userId, serverAuthCode);
+        } catch (error) {
+          console.error('[AuthService] Error saving Gmail tokens:', error);
+          // Don't fail login if Gmail token save fails
+        }
+      }
+
+      return {
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
-      }));
+      };
     }
 
     // Firestore path: use google-auth-library OAuth2Client
@@ -79,6 +95,44 @@ export class AuthService {
     );
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * saveGmailTokens — exchanges serverAuthCode for Gmail tokens and saves them encrypted.
+   */
+  private async saveGmailTokens(userId: string, serverAuthCode: string): Promise<void> {
+    const env = getEnv();
+    
+    if (!env.CREDENTIALS_JSON) {
+      console.warn('[AuthService] CREDENTIALS_JSON not configured, skipping Gmail token save');
+      return;
+    }
+
+    const credentialsJson = Buffer.from(env.CREDENTIALS_JSON, 'base64').toString('utf8');
+    const credentials = JSON.parse(credentialsJson);
+    const { client_secret, client_id } = credentials.installed;
+
+    const oAuth2Client = new google.auth.OAuth2(
+      client_id,
+      client_secret,
+      'urn:ietf:wg:oauth:2.0:oob',
+    );
+
+    const { tokens } = await oAuth2Client.getToken(serverAuthCode);
+
+    if (!tokens.access_token || !tokens.refresh_token) {
+      throw new Error('Failed to obtain Gmail tokens from serverAuthCode');
+    }
+
+    await this.userTokenRepository.upsertToken(
+      userId,
+      'gmail',
+      tokens.access_token,
+      tokens.refresh_token,
+      tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
+    );
+
+    console.log(`[AuthService] Gmail tokens saved for user ${userId}`);
   }
 
   /**
