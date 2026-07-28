@@ -9,6 +9,8 @@ export class CreditCard implements IBaseEntity {
     billingPeriodStart!: Date;
     billingPeriodEnd!: Date;
     dueDate!: Date;
+    closingDay?: number;
+    dueDay?: number;
     nationalAmountUsed!: number;
     nationalAmountAvailable!: number;
     nationalTotalLimit!: number;
