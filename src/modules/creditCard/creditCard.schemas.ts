@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const createCreditCardSchema = z
+const creditCardBaseSchema = z
   .object({
     cardType: z.string().min(1),
     cardLastDigits: z.string().min(1).max(4),
@@ -22,4 +22,17 @@ export const createCreditCardSchema = z
   })
   .strict();
 
-export const updateCreditCardSchema = createCreditCardSchema.partial();
+export const createCreditCardSchema = creditCardBaseSchema.refine(
+  (data) =>
+    (data.closingDay !== undefined && data.dueDay !== undefined) ||
+    (data.billingPeriodStart !== undefined &&
+      data.billingPeriodEnd !== undefined &&
+      data.dueDate !== undefined),
+  {
+    message:
+      "Debe proporcionar closingDay+dueDay o billingPeriodStart+billingPeriodEnd+dueDate",
+    path: ["closingDay"],
+  },
+);
+
+export const updateCreditCardSchema = creditCardBaseSchema.partial();
