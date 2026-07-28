@@ -130,9 +130,12 @@ export class SupabaseRepository<T extends IBaseEntity>
         case 'closingDay':
           row.closing_day = value;
           break;
-        case 'dueDay':
-          row.due_day = value;
-          break;
+		case 'dueDate':
+			row.due_date = value instanceof Date ? value.toISOString() : value;
+			break;
+		case 'dueDay':
+			row.due_day = value;
+			break;
         case 'nationalAmountUsed':
           row.national_amount_used = value;
           break;
