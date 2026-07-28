@@ -127,6 +127,12 @@ export class SupabaseRepository<T extends IBaseEntity>
         case 'paidInstallments':
           row.paid_installments = value;
           break;
+        case 'closingDay':
+          row.closing_day = value;
+          break;
+        case 'dueDay':
+          row.due_day = value;
+          break;
         case 'nationalAmountUsed':
           row.national_amount_used = value;
           break;
@@ -236,6 +242,12 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'paid_installments':
           entity.paidInstallments = value;
+          break;
+        case 'closing_day':
+          entity.closingDay = value;
+          break;
+        case 'due_day':
+          entity.dueDay = value;
           break;
         case 'national_amount_used':
           entity.nationalAmountUsed = value;
