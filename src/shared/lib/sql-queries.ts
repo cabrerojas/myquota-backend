@@ -91,53 +91,53 @@ export async function executeDebtSummaryQuery(
 
   const cardIds = cards.map((c) => c.id as string);
 
-  // Step 2: Get all pending quotas for those cards with billing period info
-  // We fetch via quotas JOINed with transactions + billing_periods
-  const { data, error } = await supabase
-    .from('quotas')
-    .select(`
-      id,
-      amount,
-      currency,
-      due_date,
-      transaction_id,
-      billing_periods!inner(
-        month,
-        start_date,
-        end_date,
-        due_date,
-        is_paid,
-        credit_card_id
-      )
-    `)
-    .eq('status', 'pending')
-    .is('deleted_at', null)
-    .in('billing_periods.credit_card_id', cardIds);
+  // Step 2: Get all active billing periods for the user's cards
+  const { data: billingPeriods, error: bpError } = await supabase
+    .from('billing_periods')
+    .select('id, credit_card_id, month, start_date, end_date, due_date')
+    .in('credit_card_id', cardIds)
+    .is('deleted_at', null);
 
-  if (error) {
-    throw new Error(`[sql-queries] debt summary query failed: ${error.message}`);
+  if (bpError) {
+    throw new Error(`[sql-queries] get billing periods failed: ${bpError.message}`);
   }
 
-  // Transform to RawDebtSummaryRow format
-  // Filter to only quotas where the billing period's credit card belongs to user
-  const cardIdSet = new Set(cardIds);
+  // Step 3: Get all pending quotas for those cards
+  const { data: quotas, error: qError } = await supabase
+    .from('quotas')
+    .select('id, amount, currency, due_date, credit_card_id')
+    .eq('status', 'pending')
+    .is('deleted_at', null)
+    .in('credit_card_id', cardIds);
+
+  if (qError) {
+    throw new Error(`[sql-queries] debt summary query failed: ${qError.message}`);
+  }
+
+  // Step 4: Match quotas to billing periods by credit card + date range in JS
   const result: RawDebtSummaryRow[] = [];
 
-  for (const row of data ?? []) {
-    // billing_periods is a nested select, so it's an array even with !inner
-    const bpArray = row.billing_periods as unknown as Array<Record<string, unknown>>;
-    const bp = bpArray?.[0];
-    const bpCardId = bp?.credit_card_id as string;
-    if (!bpCardId || !cardIdSet.has(bpCardId)) continue;
+  for (const quota of quotas ?? []) {
+    const dueDate = new Date(quota.due_date as string);
+    const bp = (billingPeriods ?? []).find(
+      (bp) =>
+        bp.credit_card_id === quota.credit_card_id &&
+        bp.start_date &&
+        bp.end_date &&
+        dueDate >= new Date(bp.start_date) &&
+        dueDate <= new Date(bp.end_date),
+    );
+
+    if (!bp) continue;
 
     result.push({
-      month: bp?.month as string ?? '',
-      start_date: bp?.start_date as string ?? '',
-      end_date: bp?.end_date as string ?? '',
-      due_date: row.due_date as string ?? '',
-      is_paid: (bp?.is_paid as boolean) ?? false,
-      total_amount: row.amount as number,
-      currency: row.currency as string,
+      month: bp.month ?? '',
+      start_date: bp.start_date ?? '',
+      end_date: bp.end_date ?? '',
+      due_date: quota.due_date as string ?? '',
+      is_paid: (bp as Record<string, unknown>).is_paid as boolean ?? false,
+      total_amount: quota.amount as number,
+      currency: quota.currency as string,
       quota_count: 1,
     });
   }
@@ -155,6 +155,18 @@ export async function executeMonthlyStatsQuery(
 ): Promise<RawMonthlyStatsRow[]> {
   const supabase = getSupabaseAdmin();
 
+  // Step 1: Get billing periods for this card
+  const { data: billingPeriods, error: bpError } = await supabase
+    .from('billing_periods')
+    .select('id, month, start_date, end_date')
+    .eq('credit_card_id', creditCardId)
+    .is('deleted_at', null);
+
+  if (bpError) {
+    throw new Error(`[sql-queries] get billing periods failed: ${bpError.message}`);
+  }
+
+  // Step 2: Get transactions for this card with category info
   const { data, error } = await supabase
     .from('transactions')
     .select(`
@@ -162,35 +174,38 @@ export async function executeMonthlyStatsQuery(
       currency,
       category_id,
       transaction_date,
-      billing_periods!inner(
-        month,
-        start_date,
-        end_date,
-        credit_card_id
-      ),
       categories(name)
     `)
     .eq('credit_card_id', creditCardId)
-    .is('deleted_at', null)
-    .not('billing_periods.start_date', 'is', null);
+    .is('deleted_at', null);
 
   if (error) {
     throw new Error(`[sql-queries] monthly stats query failed: ${error.message}`);
   }
 
+  // Step 3: Match transactions to billing periods by date range in JS
   const result: RawMonthlyStatsRow[] = [];
 
   for (const row of data ?? []) {
-    // Nested selects return arrays
-    const bpArray = row.billing_periods as unknown as Array<Record<string, unknown>>;
-    const bp = bpArray?.[0];
+    const txDate = new Date(row.transaction_date as string);
+
+    const bp = (billingPeriods ?? []).find(
+      (bp) =>
+        bp.start_date &&
+        bp.end_date &&
+        txDate >= new Date(bp.start_date) &&
+        txDate <= new Date(bp.end_date),
+    );
+
+    if (!bp) continue;
+
     const catArray = row.categories as unknown as Array<{ name: string }>;
     const cat = catArray?.[0] ?? null;
 
     result.push({
-      month: bp?.month as string ?? '',
-      start_date: bp?.start_date as string ?? '',
-      end_date: bp?.end_date as string ?? '',
+      month: bp.month ?? '',
+      start_date: bp.start_date ?? '',
+      end_date: bp.end_date ?? '',
       category_id: row.category_id as string | null,
       category_name: cat?.name ?? 'Otros',
       total_amount: row.amount as number,
