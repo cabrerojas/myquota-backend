@@ -2,6 +2,7 @@ import { google, Auth } from "googleapis";
 import readline from "readline";
 import { getSupabaseAdmin } from "@/config/supabase";
 import { getEnv } from "@config/env.validation";
+import { decrypt, getEncryptionKey } from "@/shared/lib/crypto";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
@@ -58,7 +59,7 @@ export async function getTokenFromFirestore(
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("user_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, refresh_token_encrypted, expires_at")
     .eq("user_id", userId)
     .eq("provider", "gmail")
     .single();
@@ -66,10 +67,22 @@ export async function getTokenFromFirestore(
   if (error?.code === "PGRST116") return null;
   if (error) return null;
 
+  // Token is stored encrypted — decrypt it
+  let refreshToken = null;
+  const encrypted = data.refresh_token_encrypted as string | null;
+  if (encrypted) {
+    try {
+      refreshToken = decrypt(encrypted, getEncryptionKey());
+    } catch {
+      console.error("[gmailAuth] Failed to decrypt refresh token");
+      refreshToken = null;
+    }
+  }
+
   return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiryDate: data.expires_at ? new Date(data.expires_at).getTime() : null,
+    accessToken: data.access_token as string,
+    refreshToken,
+    expiryDate: data.expires_at ? new Date(data.expires_at as string).getTime() : null,
   };
 }
 
