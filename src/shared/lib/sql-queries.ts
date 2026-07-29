@@ -166,27 +166,36 @@ export async function executeMonthlyStatsQuery(
     throw new Error(`[sql-queries] get billing periods failed: ${bpError.message}`);
   }
 
-  // Step 2: Get transactions for this card with category info
-  const { data, error } = await supabase
+  // Step 2: Get transactions for this card
+  const { data: txData, error: txError } = await supabase
     .from('transactions')
-    .select(`
-      amount,
-      currency,
-      category_id,
-      transaction_date,
-      categories(name)
-    `)
+    .select('amount, currency, category_id, transaction_date')
     .eq('credit_card_id', creditCardId)
     .is('deleted_at', null);
 
-  if (error) {
-    throw new Error(`[sql-queries] monthly stats query failed: ${error.message}`);
+  if (txError) {
+    throw new Error(`[sql-queries] monthly stats query failed: ${txError.message}`);
   }
 
-  // Step 3: Match transactions to billing periods by date range in JS
+  // Step 3: Look up category names separately (avoids FK dependency in schema cache)
+  const catIds = [...new Set((txData ?? []).map((t) => t.category_id).filter(Boolean))];
+  const catMap = new Map<string, string>();
+
+  if (catIds.length > 0) {
+    const { data: catData } = await supabase
+      .from('categories')
+      .select('id, name')
+      .in('id', catIds);
+
+    for (const cat of catData ?? []) {
+      catMap.set(cat.id as string, cat.name as string);
+    }
+  }
+
+  // Step 4: Match transactions to billing periods by date range in JS
   const result: RawMonthlyStatsRow[] = [];
 
-  for (const row of data ?? []) {
+  for (const row of txData ?? []) {
     const txDate = new Date(row.transaction_date as string);
 
     const bp = (billingPeriods ?? []).find(
@@ -199,15 +208,12 @@ export async function executeMonthlyStatsQuery(
 
     if (!bp) continue;
 
-    const catArray = row.categories as unknown as Array<{ name: string }>;
-    const cat = catArray?.[0] ?? null;
-
     result.push({
       month: bp.month ?? '',
       start_date: bp.start_date ?? '',
       end_date: bp.end_date ?? '',
       category_id: row.category_id as string | null,
-      category_name: cat?.name ?? 'Otros',
+      category_name: catMap.get(row.category_id as string) ?? 'Otros',
       total_amount: row.amount as number,
       currency: row.currency as string,
       transaction_count: 1,
