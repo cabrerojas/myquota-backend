@@ -103,20 +103,18 @@ export class AuthService {
   private async saveGmailTokens(userId: string, serverAuthCode: string): Promise<void> {
     const env = getEnv();
     
-    if (!env.CREDENTIALS_JSON) {
-      console.warn('[AuthService] CREDENTIALS_JSON not configured, skipping Gmail token save');
+    // Use the same GOOGLE_CLIENT_ID that the frontend used to obtain serverAuthCode.
+    // CREDENTIALS_JSON has a different client_id — mixing them causes exchange failure.
+    const clientId = env.GOOGLE_CLIENT_ID;
+    const clientSecret = env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.warn('[AuthService] GOOGLE_CLIENT_ID/CLIENT_SECRET not configured, skipping Gmail token save');
       return;
     }
 
-    const credentialsJson = Buffer.from(env.CREDENTIALS_JSON, 'base64').toString('utf8');
-    const credentials = JSON.parse(credentialsJson);
-    const { client_secret, client_id } = credentials.installed;
-
-    const oAuth2Client = new google.auth.OAuth2(
-      client_id,
-      client_secret,
-      'urn:ietf:wg:oauth:2.0:oob',
-    );
+    // No redirect_uri needed for serverAuthCode exchange from mobile apps
+    const oAuth2Client = new google.auth.OAuth2(clientId, clientSecret);
 
     const { tokens } = await oAuth2Client.getToken(serverAuthCode);
 
