@@ -61,3 +61,66 @@ export async function seedDefaultCategories(): Promise<void> {
 
   console.log(`[CategorySeed] ${DEFAULT_CATEGORIES.length} default categories ensured`);
 }
+
+// ─── Known merchant keyword → category mappings ────────────────────────────
+// These auto-suggest categories during email import based on charge descriptions.
+
+const MERCHANT_KEYWORDS: Record<string, string[]> = {
+  "Supermercado": ["tottus", "lider", "jumbo", "santa isabel", "unimarc", "mayorista", "acuenta", "ekono"],
+  "Farmacia": ["salcobrand", "cruz verde", "ahumada", "farmax", "dr simi", "d r simi", "farmacias"],
+  "Combustible": ["copec", "shell", "petrobras", "terpel", "energy", "petro"],
+  "Restaurantes": ["mcdonalds", "burger king", "kfc", "pizza hut", "telepizza", "domino", "papa johns", "subway", "starbucks", "dunkin"],
+  "Delivery": ["uber", "rappi", "pedidosya", "cornershop", "ubereats"],
+  "Servicios": ["enel", "metrogas", "aguas", "vtr", "movistar", "claro", "entel", "directv", "flow"],
+  "Transporte": ["metro", "bip", "uber", "cabify", "did", "transporte"],
+  "Entretenimiento": ["netflix", "spotify", "disney", "hbo", "amazon prime", "youtube", "cinemark", "cinehoyts", "cine"],
+  "Salud": ["clinica", "hospital", "medico", "consulta", "isapre", "fonasa"],
+};
+
+export async function seedMerchantPatterns(): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  // Get all global categories by name
+  const { data: cats } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("is_global", true)
+    .is("deleted_at", null);
+
+  if (!cats || cats.length === 0) {
+    console.warn("[MerchantSeed] No global categories found — run category seed first");
+    return;
+  }
+
+  const catMap = new Map<string, string>();
+  for (const c of cats) {
+    catMap.set(c.name.toLowerCase(), c.id as string);
+  }
+
+  let inserted = 0;
+  for (const [catName, keywords] of Object.entries(MERCHANT_KEYWORDS)) {
+    const categoryId = catMap.get(catName.toLowerCase());
+    if (!categoryId) continue;
+
+    for (const kw of keywords) {
+      const { data: existing } = await supabase
+        .from("merchant_patterns")
+        .select("id")
+        .eq("pattern", kw)
+        .eq("category_id", categoryId)
+        .maybeSingle();
+
+      if (existing) continue;
+
+      await supabase.from("merchant_patterns").insert({
+        name: kw,
+        pattern: kw,
+        category_id: categoryId,
+        created_by: null,
+      });
+      inserted++;
+    }
+  }
+
+  console.log(`[MerchantSeed] ${inserted} merchant patterns seeded`);
+}

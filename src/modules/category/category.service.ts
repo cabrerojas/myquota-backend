@@ -254,30 +254,24 @@ export class CategoryService extends BaseService<Category> {
     // Check global category first
     const globalCat = await this.globalRepository.findById(categoryId);
     if (globalCat) {
-      await this.addMerchantPatternToCategory(
-        globalCat.id,
-        merchantName,
-        merchantName,
-        userId,
-      );
+      await this.addMerchantPatternToCategory(globalCat.id, merchantName, merchantName, userId);
       return;
     }
 
     // It's a personal category — find the global equivalent by normalizedName
     if (this.userRepository) {
       const personalCat = await this.userRepository.findById(categoryId);
-      if (personalCat?.normalizedName) {
-        const globalEquivalent = await this.globalRepository.findOne({
-          normalizedName: personalCat.normalizedName,
-        });
-        if (globalEquivalent) {
-          await this.addMerchantPatternToCategory(
-            globalEquivalent.id,
-            merchantName,
-            merchantName,
-            userId,
-          );
-        }
+      if (!personalCat) return;
+      
+      const globalEquivalent = await this.globalRepository.findOne({
+        normalizedName: personalCat.normalizedName,
+      });
+      if (globalEquivalent) {
+        await this.addMerchantPatternToCategory(globalEquivalent.id, merchantName, merchantName, userId);
+      } else {
+        // No global equivalent — still register the pattern with the personal category
+        // so future imports for the same user can auto-suggest it.
+        await this.addMerchantPatternToCategory(personalCat.id, merchantName, merchantName, userId);
       }
     }
   }
