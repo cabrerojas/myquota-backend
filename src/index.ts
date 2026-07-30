@@ -7,6 +7,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 
 import { errorHandler } from "./shared/middlewares/errorHandler";
+import { seedDefaultCategories } from "./modules/category/category.seed";
 import createTransactionRouter from "./modules/transaction/transaction.routes";
 import createQuotaRouter from "./modules/quota/quota.routes";
 import createCreditCardRouter from "./modules/creditCard/creditCard.routes";
@@ -72,6 +73,11 @@ app.use("/api", createStatsRouter());
 app.use("/api/categories", createCategoryRouter());
 
 app.use(errorHandler);
+
+// Seed default categories on startup (non-blocking)
+seedDefaultCategories().catch((err) => {
+  console.error("[Startup] Error seeding categories:", err);
+});
 
 app.listen(env.PORT, () => {
   console.warn(`Servidor ejecutándose en el puerto ${env.PORT}`);
