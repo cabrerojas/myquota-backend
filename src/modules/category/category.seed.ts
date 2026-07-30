@@ -70,7 +70,7 @@ const MERCHANT_KEYWORDS: Record<string, string[]> = {
   "Farmacia": ["salcobrand", "cruz verde", "ahumada", "farmax", "dr simi", "d r simi", "farmacias"],
   "Combustible": ["copec", "shell", "petrobras", "terpel", "energy", "petro"],
   "Restaurantes": ["mcdonalds", "burger king", "kfc", "pizza hut", "telepizza", "domino", "papa johns", "subway", "starbucks", "dunkin"],
-  "Delivery": ["uber", "rappi", "pedidosya", "cornershop", "ubereats"],
+  "Delivery": ["uber eats", "rappi", "pedidosya", "cornershop", "ubereats"],
   "Servicios": ["enel", "metrogas", "aguas", "vtr", "movistar", "claro", "entel", "directv", "flow"],
   "Transporte": ["metro", "bip", "uber", "cabify", "did", "transporte"],
   "Entretenimiento": ["netflix", "spotify", "disney", "hbo", "amazon prime", "youtube", "cinemark", "cinehoyts", "cine"],
