@@ -199,7 +199,8 @@ export class TransactionService extends BaseService<Transaction> {
     }
 
     // UN solo findAll() compartido por initializeQuotas y checkOrphans
-    const txResult = await this.repository.findAll();
+    // Usar límite alto para procesar TODAS las transacciones
+    const txResult = await this.repository.findAll(undefined, { limit: 10000 });
     const transactions = txResult.items;
 
     const [quotasCreated, { orphanedTransactions, suggestedPeriod }] =
@@ -283,7 +284,7 @@ export class TransactionService extends BaseService<Transaction> {
     // Reutilizar lista pre-cargada si viene del flujo de import, evitando un findAll() extra
     const txResult = preloadedTransactions 
       ? { items: preloadedTransactions, metadata: { hasMore: false, nextCursor: null } }
-      : await this.repository.findAll();
+      : await this.repository.findAll(undefined, { limit: 10000 });
     const transactions = txResult.items;
 
     if (!transactions.length) return 0;
