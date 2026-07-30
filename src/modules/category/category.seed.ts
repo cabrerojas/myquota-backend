@@ -27,14 +27,22 @@ export async function seedDefaultCategories(): Promise<void> {
   const supabase = getSupabaseAdmin();
 
   for (const cat of DEFAULT_CATEGORIES) {
+    // Check if category exists by name (any user)
     const { data: existing } = await supabase
       .from("categories")
-      .select("id")
+      .select("id, is_global")
       .eq("name", cat.name)
-      .eq("user_id", "default")
       .maybeSingle();
 
-    if (existing) continue;
+    if (existing) {
+      // Ensure is_global = true for all default categories
+      if (!existing.is_global) {
+        await supabase.from("categories")
+          .update({ is_global: true })
+          .eq("id", existing.id);
+      }
+      continue;
+    }
 
     await supabase.from("categories").insert({
       name: cat.name,
