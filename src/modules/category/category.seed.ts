@@ -35,11 +35,14 @@ export async function seedDefaultCategories(): Promise<void> {
       .maybeSingle();
 
     if (existing) {
-      // Ensure is_global = true for all default categories
-      if (!existing.is_global) {
-        await supabase.from("categories")
-          .update({ is_global: true })
-          .eq("id", existing.id);
+      // Ensure is_global and normalized_name for existing default categories
+      const updates: Record<string, unknown> = {};
+      if (!existing.is_global) updates.is_global = true;
+      if (!(existing as Record<string, unknown>).normalized_name) {
+        updates.normalized_name = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("categories").update(updates).eq("id", existing.id);
       }
       continue;
     }
