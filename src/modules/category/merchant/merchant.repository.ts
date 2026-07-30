@@ -27,11 +27,11 @@ export class MerchantPatternRepository {
       const row = existing[0];
       return {
         id: row.id as string,
-        name: row.name as string,
+        name: (row.name as string) || "",
         pattern: row.pattern as string,
-        createdBy: row.created_by as string,
-        createdAt: new Date(row.created_at as string),
-        updatedAt: new Date(row.updated_at as string),
+        createdBy: (row.created_by as string) || "",
+        createdAt: new Date((row.created_at as string) || Date.now()),
+        updatedAt: new Date(),
         deletedAt: null,
       } as MerchantPattern;
     }
@@ -45,9 +45,7 @@ export class MerchantPatternRepository {
         id,
         category_id: this.categoryId,
         pattern: pattern.pattern,
-        created_by: pattern.createdBy,
         created_at: now,
-        updated_at: now,
         deleted_at: null,
       })
       .select()
@@ -59,11 +57,11 @@ export class MerchantPatternRepository {
 
     return {
       id: data.id as string,
-      name: data.name as string,
+      name: (data.name as string) || "",
       pattern: data.pattern as string,
-      createdBy: data.created_by as string,
-      createdAt: new Date(data.created_at as string),
-      updatedAt: new Date(data.updated_at as string),
+      createdBy: (data.created_by as string) || "",
+      createdAt: new Date((data.created_at as string) || Date.now()),
+      updatedAt: new Date(),
       deletedAt: null,
     } as MerchantPattern;
   }

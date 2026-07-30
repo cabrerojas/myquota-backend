@@ -116,7 +116,6 @@ export async function seedMerchantPatterns(): Promise<void> {
         pattern: kw,
         category_id: categoryId,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         deleted_at: null,
       });
 
