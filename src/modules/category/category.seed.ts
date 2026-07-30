@@ -51,7 +51,7 @@ export async function seedDefaultCategories(): Promise<void> {
       name: cat.name,
       icon: cat.icon,
       color: cat.color,
-      user_id: "default",
+      user_id: null,
       is_global: true,
       normalized_name: cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
       created_at: new Date().toISOString(),
