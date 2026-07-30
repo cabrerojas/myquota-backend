@@ -112,7 +112,7 @@ export async function seedMerchantPatterns(): Promise<void> {
 
       if (existing) continue;
 
-      await supabase.from("merchant_patterns").insert({
+      const { error: insertErr } = await supabase.from("merchant_patterns").insert({
         name: kw,
         pattern: kw,
         category_id: categoryId,
@@ -120,7 +120,12 @@ export async function seedMerchantPatterns(): Promise<void> {
         updated_at: new Date().toISOString(),
         deleted_at: null,
       });
-      inserted++;
+
+      if (insertErr) {
+        console.warn(`[MerchantSeed] Failed to insert ${kw}: ${insertErr.message}`);
+      } else {
+        inserted++;
+      }
     }
   }
 
