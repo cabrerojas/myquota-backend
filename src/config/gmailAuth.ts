@@ -59,7 +59,7 @@ export async function getTokenFromFirestore(
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("user_tokens")
-    .select("access_token, refresh_token_encrypted, expires_at")
+    .select("access_token, refresh_token_encrypted, expiry_date")
     .eq("user_id", userId)
     .eq("provider", "gmail")
     .single();
@@ -82,7 +82,7 @@ export async function getTokenFromFirestore(
   return {
     accessToken: data.access_token as string,
     refreshToken,
-    expiryDate: data.expires_at ? new Date(data.expires_at as string).getTime() : null,
+    expiryDate: data.expiry_date ? new Date(data.expiry_date as string).getTime() : null,
   };
 }
 
