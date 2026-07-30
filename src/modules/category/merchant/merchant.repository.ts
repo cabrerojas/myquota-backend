@@ -44,7 +44,6 @@ export class MerchantPatternRepository {
       .insert({
         id,
         category_id: this.categoryId,
-        name: pattern.name,
         pattern: pattern.pattern,
         created_by: pattern.createdBy,
         created_at: now,
