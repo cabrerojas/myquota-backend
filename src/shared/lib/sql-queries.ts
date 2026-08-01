@@ -206,12 +206,15 @@ export async function executeMonthlyStatsQuery(
         txDate <= new Date(bp.end_date),
     );
 
-    if (!bp) continue;
+    // Use billing period month if found, otherwise fall back to calendar month
+    const month =
+      bp?.month ??
+      `${txDate.getFullYear()}-${(txDate.getMonth() + 1).toString().padStart(2, "0")}`;
 
     result.push({
-      month: bp.month ?? '',
-      start_date: bp.start_date ?? '',
-      end_date: bp.end_date ?? '',
+      month,
+      start_date: bp?.start_date ?? '',
+      end_date: bp?.end_date ?? '',
       category_id: row.category_id as string | null,
       category_name: catMap.get(row.category_id as string) ?? 'Otros',
       total_amount: row.amount as number,
