@@ -136,6 +136,12 @@ export class SupabaseRepository<T extends IBaseEntity>
 		case 'dueDay':
 			row.due_day = value;
 			break;
+		case 'startDate':
+			row.start_date = value instanceof Date ? value.toISOString() : value;
+			break;
+		case 'endDate':
+			row.end_date = value instanceof Date ? value.toISOString() : value;
+			break;
         case 'nationalAmountUsed':
           row.national_amount_used = value;
           break;
@@ -289,6 +295,12 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'due_date':
           entity.dueDate = value ? new Date(value as string) : undefined;
+          break;
+        case 'start_date':
+          entity.startDate = value ? new Date(value as string) : undefined;
+          break;
+        case 'end_date':
+          entity.endDate = value ? new Date(value as string) : undefined;
           break;
         case 'expiry_date':
           entity.expiryDate = value ? new Date(value as string) : undefined;
