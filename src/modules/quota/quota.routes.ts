@@ -54,7 +54,7 @@ const createQuotaRouter = (): Router => {
   router.get(
     "/creditCards/:creditCardId/transactions/:transactionId/quotas",
     (req: Request, res: Response) => {
-      return res.locals.quotaController.getQuotas(req, res);
+      return res.locals.quotaController.getQuotasByTransactionId(req, res);
     },
   );
 
