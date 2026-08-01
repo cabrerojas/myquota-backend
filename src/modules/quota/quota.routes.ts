@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { QuotaController } from "./quota.controller";
-import { createQuotaRepository, createTransactionRepository } from "@/shared/classes/repository.factory";
+import { createQuotaRepository, createTransactionRepository, createBillingPeriodRepository } from "@/shared/classes/repository.factory";
 import { QuotaService } from "./quota.service";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
@@ -33,9 +33,14 @@ const createQuotaRouter = (): Router => {
           creditCardId,
         );
         const quotaRepository = createQuotaRepository();
+        const billingPeriodRepo = createBillingPeriodRepository(
+          userId,
+          creditCardId,
+        );
         const service = new QuotaService(
           quotaRepository,
           transactionRepository,
+          billingPeriodRepo,
         );
         const controller = new QuotaController(service);
         res.locals.quotaController = controller;

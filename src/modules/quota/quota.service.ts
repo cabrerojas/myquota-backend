@@ -5,20 +5,44 @@ import { QuotaRepositorySupabase } from "./quota.repository.supabase";
 import { BaseService } from "@/shared/classes/base.service";
 import { RepositoryError } from "@/shared/errors/custom.error";
 import { TransactionRepositorySupabase } from "@/modules/transaction/transaction.repository.supabase";
+import { BillingPeriodRepositorySupabase } from "@/modules/billingPeriod/billingPeriod.repository.supabase";
 
 export class QuotaService extends BaseService<Quota> {
   protected transactionRepository: TransactionRepositorySupabase;
+  private billingPeriodRepo?: BillingPeriodRepositorySupabase;
 
   constructor(
     repository: QuotaRepositorySupabase,
     transactionRepository: TransactionRepositorySupabase,
+    billingPeriodRepo?: BillingPeriodRepositorySupabase,
   ) {
     super(repository);
     this.transactionRepository = transactionRepository;
+    this.billingPeriodRepo = billingPeriodRepo;
   }
 
   async getQuotasByTransaction(_creditCardId: string, transactionId: string) {
-    return await this.transactionRepository.getQuotas(transactionId);
+    const quotas = await this.transactionRepository.getQuotas(transactionId);
+
+    // Enrich each quota with its billing period's due date
+    if (this.billingPeriodRepo && quotas.length > 0) {
+      const bpResult = await this.billingPeriodRepo.findAll();
+      const periods = bpResult.items;
+
+      for (const quota of quotas) {
+        const dueTime = new Date(quota.dueDate).getTime();
+        const period = periods.find((p) => {
+          const start = new Date(p.startDate).getTime();
+          const end = new Date(p.endDate).getTime();
+          return dueTime >= start && dueTime <= end;
+        });
+        if (period?.dueDate) {
+          (quota as unknown as Record<string, unknown>).billingDueDate = period.dueDate;
+        }
+      }
+    }
+
+    return quotas;
   }
 
   async splitTransactionIntoQuotas(
