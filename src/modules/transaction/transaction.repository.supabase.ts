@@ -2,14 +2,91 @@
 // Supabase implementation of the Transaction repository.
 // Replaces Firestore subcollection access with top-level table + JOINs.
 
-import { SupabaseRepository } from '@/shared/classes/supabase.repository';
+import {
+  SupabaseRepository,
+  PaginationParams,
+  QueryResult,
+  camelToSnake,
+} from '@/shared/classes/supabase.repository';
 import { Transaction } from './transaction.model';
 import { Quota } from '@/modules/quota/quota.model';
 import { RepositoryError } from '@/shared/errors/custom.error';
 
+/** Extended pagination params that support date-range filtering at the SQL level. */
+export interface TransactionPaginationParams extends PaginationParams {
+  startDate?: string;
+  endDate?: string;
+}
+
 export class TransactionRepositorySupabase extends SupabaseRepository<Transaction> {
   constructor(private readonly creditCardId: string) {
     super('transactions');
+  }
+
+  // ===============================================
+  // CORE: findAll with credit_card_id + date range
+  // ===============================================
+
+  async findAll(
+    filters?: Partial<Transaction>,
+    pagination?: TransactionPaginationParams,
+  ): Promise<QueryResult<Transaction>> {
+    let query = this.client()
+      .from(this.tableName)
+      .select('*', { count: 'exact' })
+      .eq('credit_card_id', this.creditCardId)
+      .is('deleted_at', null);
+
+    // Date-range filters pushed to SQL (replaces in-memory post-filter)
+    if (pagination?.startDate) {
+      query = query.gte('transaction_date', pagination.startDate);
+    }
+    if (pagination?.endDate) {
+      query = query.lte('transaction_date', pagination.endDate);
+    }
+
+    // Apply equality filters (skip creditCardId — already applied above)
+    if (filters) {
+      for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== null && key !== 'creditCardId') {
+          const columnName = camelToSnake(key);
+          query = query.eq(columnName, value);
+        }
+      }
+    }
+
+    // Ordering
+    const orderByField = camelToSnake(pagination?.orderBy || 'created_at');
+    const orderDirection = pagination?.orderDirection || 'desc';
+    query = query.order(orderByField, { ascending: orderDirection === 'asc' });
+
+    // Limit +1 for hasMore detection
+    const limit = pagination?.limit || 50;
+    query = query.limit(limit + 1);
+
+    // Cursor (key-set pagination)
+    if (pagination?.startAfter) {
+      query = query.gt('id', pagination.startAfter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new RepositoryError(`Error finding transactions: ${error.message}`, 500);
+    }
+
+    const rows = (data || []) as Record<string, unknown>[];
+    const items = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+    const nextCursor =
+      hasMore && items.length > 0
+        ? (items[items.length - 1] as Record<string, unknown>).id as string
+        : null;
+
+    return {
+      items: items.map((row) => this.mapRowToEntity(row)),
+      metadata: { hasMore, nextCursor },
+    };
   }
 
   /**

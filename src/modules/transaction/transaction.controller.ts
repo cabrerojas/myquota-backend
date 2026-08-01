@@ -10,35 +10,18 @@ export class TransactionController {
   // Usar métodos de clase arrow functions para evitar problemas con el this
   getTransactions = async (req: Request, res: Response): Promise<void> => {
     try {
-      // Extract pagination params
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
       const startAfter = req.query.startAfter as string | undefined;
-      
-      // Extract date filter params
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
-      
-      // Determine if we should filter by date
-      const useDateFilter = startDate || endDate;
-      
+
       const result = await this.service.findAll(
-        undefined, // no filters
-        { limit, startAfter, orderBy: "transactionDate", orderDirection: "desc" }
+        undefined,
+        { limit, startAfter, orderBy: "transactionDate", orderDirection: "desc", startDate, endDate }
       );
-      let transactions = result.items;
+      const transactions = result.items;
 
-      // Apply date filtering in-memory if specified
-      if (useDateFilter && (startDate || endDate)) {
-        transactions = transactions.filter((tx) => {
-          if (!tx.transactionDate) return false;
-          const txDate = new Date(tx.transactionDate).getTime();
-          if (startDate && txDate < new Date(startDate).getTime()) return false;
-          if (endDate && txDate > new Date(endDate).getTime()) return false;
-          return true;
-        });
-      }
-
-      // Adjuntar detalles de categoría (nombre, icono, color) cuando esté disponible
+      // Category enrichment (uses L1 memory cache, 5-min TTL)
       const userId = req.user?.userId;
       if (userId) {
         try {
@@ -61,7 +44,6 @@ export class TransactionController {
           return;
         } catch (e) {
           console.warn("Could not enrich transactions with categories:", e);
-          // fallback to returning raw transactions
         }
       }
 

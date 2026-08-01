@@ -1,8 +1,9 @@
 import { convertUtcToChileTime } from "@/shared/utils/date.utils";
 
-import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
+import { TransactionRepositorySupabase, TransactionPaginationParams } from "./transaction.repository.supabase";
 import { Transaction } from "./transaction.model";
 import { BaseService } from "@/shared/classes/base.service";
+import { QueryResult } from "@/shared/classes/supabase.repository";
 import { Quota } from "@/modules/quota/quota.model";
 import { BillingPeriodRepositorySupabase } from "@modules/billingPeriod/billingPeriod.repository.supabase";
 import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
@@ -30,6 +31,14 @@ export class TransactionService extends BaseService<Transaction> {
     this.emailImportService = new EmailImportService();
     this.categoryMatcher = categoryMatcher;
     this.manualTransactionService = new ManualTransactionService(repository);
+  }
+
+  /** Override to accept date-range pagination params. */
+  async findAll(
+    filters?: Partial<Transaction>,
+    pagination?: TransactionPaginationParams,
+  ): Promise<QueryResult<Transaction>> {
+    return this.repository.findAll(filters, pagination);
   }
 
   async fetchBankEmails(userId: string): Promise<{ importedCount: number }> {

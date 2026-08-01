@@ -41,6 +41,9 @@ function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
+/** Exported for use in subclasses that override findAll. */
+export { camelToSnake };
+
 /**
  * Base Supabase repository implementing IBaseRepository<T>.
  *
