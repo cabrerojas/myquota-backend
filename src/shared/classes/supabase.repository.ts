@@ -139,6 +139,12 @@ export class SupabaseRepository<T extends IBaseEntity>
 		case 'dueDay':
 			row.due_day = value;
 			break;
+		case 'monthlyBudgetCLP':
+			row.monthly_budget_clp = value;
+			break;
+		case 'monthlyBudgetUSD':
+			row.monthly_budget_usd = value;
+			break;
 		case 'startDate':
 			row.start_date = value instanceof Date ? value.toISOString() : value;
 			break;
@@ -260,6 +266,12 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'due_day':
           entity.dueDay = value;
+          break;
+        case 'monthly_budget_clp':
+          entity.monthlyBudgetCLP = value;
+          break;
+        case 'monthly_budget_usd':
+          entity.monthlyBudgetUSD = value;
           break;
         case 'national_amount_used':
           entity.nationalAmountUsed = value;
