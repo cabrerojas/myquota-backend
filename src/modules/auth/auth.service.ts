@@ -52,6 +52,7 @@ export class AuthService {
         body: new URLSearchParams({
           code,
           client_id: clientId,
+          client_secret: env.GOOGLE_CLIENT_SECRET ?? '',
           redirect_uri: redirectUri ?? '',
           grant_type: 'authorization_code',
           ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
