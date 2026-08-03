@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 export const loginGoogleSchema = z.object({
-  token: z.string().min(1, "Token es requerido"),
+  token: z.string().optional(),
+  code: z.string().optional(),
+  codeVerifier: z.string().optional(),
+  redirectUri: z.string().optional(),
   serverAuthCode: z.string().optional(),
   nonce: z.string().optional(),
 });

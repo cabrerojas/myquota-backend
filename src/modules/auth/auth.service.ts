@@ -25,15 +25,62 @@ export class AuthService {
 
   /**
    * loginWithGoogle — verifies Google ID token and returns access + refresh tokens.
-   * When USE_SUPABASE=true: uses Supabase signInWithIdToken (provider: 'google').
-   * When USE_SUPABASE=false: uses OAuth2Client.verifyIdToken (Firebase path).
+   *
+   * Two flows supported:
+   * 1. Native (token): receives id_token directly → verifies via Supabase/Firestore
+   * 2. Web (code + codeVerifier): receives authorization code → exchanges for id_token
+   *    via Google token endpoint (PKCE) → verifies via Supabase/Firestore
    */
   async loginWithGoogle(
-    idToken: string,
+    idToken?: string,
     serverAuthCode?: string,
     nonce?: string,
+    code?: string,
+    codeVerifier?: string,
+    redirectUri?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const env = getEnv();
+
+    // ── Web flow: exchange authorization code for id_token ──
+    if (code) {
+      const clientId = env.GOOGLE_CLIENT_ID;
+
+      // Exchange code for tokens via Google's token endpoint
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          redirect_uri: redirectUri ?? '',
+          grant_type: 'authorization_code',
+          ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json();
+        console.error('[AuthService] Google token exchange error:', err);
+        throw new AuthError('Error al intercambiar código de autorización', 401);
+      }
+
+      const tokenData = await tokenRes.json();
+      idToken = tokenData.id_token;
+
+      if (!idToken) {
+        throw new AuthError('Google no devolvió id_token en el intercambio', 401);
+      }
+
+      // If Gmail scope was requested, Google returns access_token + refresh_token
+      if (tokenData.access_token) {
+        // We'll save Gmail tokens after Supabase login
+        serverAuthCode = undefined; // Don't double-exchange; we already have tokens
+      }
+    }
+
+    if (!idToken) {
+      throw new AuthError('Token o código de autorización requerido', 400);
+    }
 
     if (env.USE_SUPABASE === 'true') {
       // Supabase path: signInWithIdToken handles Google identity verification

@@ -7,13 +7,20 @@ export class AuthController {
 
   loginWithGoogle = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { token, serverAuthCode, nonce } = req.body;
-      if (!token) {
-        res.status(400).json({ message: "Token no proporcionado" });
+      const { token, code, codeVerifier, redirectUri, serverAuthCode, nonce } = req.body;
+      if (!token && !code) {
+        res.status(400).json({ message: "Token o código de autorización requerido" });
         return;
       }
 
-      const tokens = await this.service.loginWithGoogle(token, serverAuthCode, nonce);
+      const tokens = await this.service.loginWithGoogle(
+        token,
+        serverAuthCode,
+        nonce,
+        code,
+        codeVerifier,
+        redirectUri,
+      );
 
       res.status(200).json(tokens);
     } catch (error) {
