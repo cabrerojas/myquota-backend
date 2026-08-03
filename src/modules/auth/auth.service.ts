@@ -64,7 +64,11 @@ export class AuthService {
         throw new AuthError('Error al intercambiar código de autorización', 401);
       }
 
-      const tokenData = await tokenRes.json();
+      const tokenData = await tokenRes.json() as {
+        id_token?: string;
+        access_token?: string;
+        refresh_token?: string;
+      };
       idToken = tokenData.id_token;
 
       if (!idToken) {
