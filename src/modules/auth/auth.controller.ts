@@ -7,13 +7,13 @@ export class AuthController {
 
   loginWithGoogle = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { token, serverAuthCode } = req.body;
+      const { token, serverAuthCode, nonce } = req.body;
       if (!token) {
         res.status(400).json({ message: "Token no proporcionado" });
         return;
       }
 
-      const tokens = await this.service.loginWithGoogle(token, serverAuthCode);
+      const tokens = await this.service.loginWithGoogle(token, serverAuthCode, nonce);
 
       res.status(200).json(tokens);
     } catch (error) {

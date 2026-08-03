@@ -60,12 +60,14 @@ export class SupabaseAuthService {
    */
   async signInWithGoogle(
     idToken: string,
+    nonce?: string,
   ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
     const supabase = getSupabaseAnon();
 
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
+      nonce,
     });
 
     if (error || !data.user || !data.session) {

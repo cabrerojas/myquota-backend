@@ -31,12 +31,13 @@ export class AuthService {
   async loginWithGoogle(
     idToken: string,
     serverAuthCode?: string,
+    nonce?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const env = getEnv();
 
     if (env.USE_SUPABASE === 'true') {
       // Supabase path: signInWithIdToken handles Google identity verification
-      const result = await this.supabaseAuth.signInWithGoogle(idToken);
+      const result = await this.supabaseAuth.signInWithGoogle(idToken, nonce);
 
       // If serverAuthCode is provided, exchange it for Gmail tokens and save them
       if (serverAuthCode) {
