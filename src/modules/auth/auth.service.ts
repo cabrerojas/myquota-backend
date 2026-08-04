@@ -141,10 +141,43 @@ export class AuthService {
 
     const { email } = payload;
 
-    // Issue JWTs (Firestore path — Supabase path returns its own tokens)
+    // When falling back from Supabase, find/create the Supabase user to get UUID
+    let userId = email; // default for pure Firestore path
+    if (env.USE_SUPABASE === 'true') {
+      try {
+        const { getSupabaseAdmin } = await import('@config/supabase');
+        const supabaseAdmin = getSupabaseAdmin();
+        // Try to find existing user by email
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const existing = existingUsers?.users?.find(u => u.email === email);
+        if (existing) {
+          userId = existing.id;
+        } else {
+          // Create the user in Supabase
+          const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            email_confirm: true,
+            user_metadata: {
+              given_name: payload.given_name,
+              family_name: payload.family_name,
+              picture: payload.picture,
+            },
+          });
+          if (createError || !newUser.user) {
+            console.error('[AuthService] Failed to create Supabase user:', createError?.message);
+          } else {
+            userId = newUser.user.id;
+          }
+        }
+      } catch (adminError) {
+        console.warn('[AuthService] Could not get Supabase admin client, using email as userId:', adminError);
+      }
+    }
+
+    // Issue JWTs with correct userId (UUID on Supabase, email on Firestore)
     const jwtSecret = env.JWT_SECRET as jwt.Secret;
     const accessToken = jwt.sign(
-      { userId: email, email, type: 'access' },
+      { userId, email, type: 'access' },
       jwtSecret,
       { expiresIn: env.ACCESS_TOKEN_EXPIRES_IN } as jwt.SignOptions,
     );
