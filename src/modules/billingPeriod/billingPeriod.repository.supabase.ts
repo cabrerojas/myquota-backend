@@ -126,6 +126,7 @@ export class BillingPeriodRepositorySupabase extends SupabaseRepository<BillingP
       else if (key === 'userId') updates.user_id = value;
       else if (key === 'startDate') updates.start_date = value instanceof Date ? value.toISOString() : value;
       else if (key === 'endDate') updates.end_date = value instanceof Date ? value.toISOString() : value;
+      else if (key === 'dueDate') updates.due_date = value instanceof Date ? value.toISOString() : value;
       else if (key === 'createdAt') updates.created_at = value instanceof Date ? value.toISOString() : value;
       else if (key === 'updatedAt') updates.updated_at = now;
       else if (key === 'deletedAt') updates.deleted_at = value instanceof Date ? value.toISOString() : value;
