@@ -14,9 +14,13 @@ export class TransactionController {
       const startAfter = req.query.startAfter as string | undefined;
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
+      const categoryId = req.query.categoryId as string | undefined;
+
+      const filters: Partial<Transaction> = {};
+      if (categoryId) filters.categoryId = categoryId;
 
       const result = await this.service.findAll(
-        undefined,
+        Object.keys(filters).length > 0 ? filters : undefined,
         { limit, startAfter, orderBy: "transactionDate", orderDirection: "desc", startDate, endDate }
       );
       const transactions = result.items;
