@@ -31,9 +31,10 @@ interface MonthlyStatEntry {
   month: string;
   totalCLP: number;
   totalUSD: number;
-  categoryBreakdown: {
-    [category: string]: { CLP: number; USD: number };
-  };
+  categoryBreakdown: Record<
+    string,
+    { categoryId: string; categoryName: string; CLP: number; USD: number }
+  >;
 }
 
 export class StatsService {
@@ -240,10 +241,16 @@ export class StatsService {
         entry.totalUSD += row.total_amount;
       }
 
-      if (!entry.categoryBreakdown[row.category_name]) {
-        entry.categoryBreakdown[row.category_name] = { CLP: 0, USD: 0 };
+      const catId = row.category_id ?? 'unknown';
+      if (!entry.categoryBreakdown[catId]) {
+        entry.categoryBreakdown[catId] = {
+          categoryId: catId,
+          categoryName: row.category_name ?? 'Sin categoría',
+          CLP: 0,
+          USD: 0,
+        };
       }
-      entry.categoryBreakdown[row.category_name][currency] += row.total_amount;
+      entry.categoryBreakdown[catId][currency] += row.total_amount;
     }
 
     return Array.from(statsMap.values());
