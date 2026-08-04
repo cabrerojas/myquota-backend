@@ -237,7 +237,17 @@ export class AuthService {
     const env = getEnv();
 
     if (env.USE_SUPABASE === 'true') {
-      return this.supabaseAuth.refreshSession(refreshToken);
+      try {
+        return await this.supabaseAuth.refreshSession(refreshToken);
+      } catch (supabaseError) {
+        // If Supabase refresh fails (e.g., custom JWT from nonce fallback),
+        // fall through to manual JWT verification
+        if (supabaseError instanceof AuthError) {
+          console.warn('[AuthService] Supabase refresh failed, trying JWT verification');
+        } else {
+          throw supabaseError;
+        }
+      }
     }
 
     // Firestore path: manual JWT verification
