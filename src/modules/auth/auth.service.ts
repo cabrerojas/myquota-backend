@@ -184,10 +184,19 @@ export class AuthService {
 
     const refreshSecret = env.JWT_REFRESH_SECRET as jwt.Secret;
     const refreshToken = jwt.sign(
-      { userId: email, type: 'refresh' },
+      { userId, type: 'refresh' },
       refreshSecret,
       { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions,
     );
+
+    // Save Gmail tokens if serverAuthCode was provided (same as Supabase path)
+    if (serverAuthCode) {
+      try {
+        await this.saveGmailTokens(userId, serverAuthCode);
+      } catch (error) {
+        console.error('[AuthService] Error saving Gmail tokens:', error);
+      }
+    }
 
     return { accessToken, refreshToken };
   }
