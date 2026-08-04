@@ -72,7 +72,7 @@ export class SupabaseAuthService {
 
     if (error || !data.user || !data.session) {
       console.error('[SupabaseAuthService] Google signInWithIdToken error:', error?.message);
-      throw new AuthError('Token de Google inválido o expirado', 401);
+      throw new AuthError(error?.message ?? 'Token de Google inválido o expirado', 401);
     }
 
     // Use Supabase session tokens directly
