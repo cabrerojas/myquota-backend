@@ -64,13 +64,11 @@ export class SupabaseAuthService {
   ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
     const supabase = getSupabaseAnon();
 
-    const params: Record<string, string> = {
+    const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
-    };
-    if (nonce) params.nonce = nonce;
-
-    const { data, error } = await supabase.auth.signInWithIdToken(params);
+      ...(nonce ? { nonce } : {}),
+    });
 
     if (error || !data.user || !data.session) {
       console.error('[SupabaseAuthService] Google signInWithIdToken error:', error?.message);
