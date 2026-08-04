@@ -89,22 +89,31 @@ export class AuthService {
 
     if (env.USE_SUPABASE === 'true') {
       // Supabase path: signInWithIdToken handles Google identity verification
-      const result = await this.supabaseAuth.signInWithGoogle(idToken, nonce);
+      try {
+        const result = await this.supabaseAuth.signInWithGoogle(idToken, nonce);
 
-      // If serverAuthCode is provided, exchange it for Gmail tokens and save them
-      if (serverAuthCode) {
-        try {
-          await this.saveGmailTokens(result.userId, serverAuthCode);
-        } catch (error) {
-          console.error('[AuthService] Error saving Gmail tokens:', error);
-          // Don't fail login if Gmail token save fails
+        // If serverAuthCode is provided, exchange it for Gmail tokens and save them
+        if (serverAuthCode) {
+          try {
+            await this.saveGmailTokens(result.userId, serverAuthCode);
+          } catch (error) {
+            console.error('[AuthService] Error saving Gmail tokens:', error);
+          }
+        }
+
+        return {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        };
+      } catch (supabaseError) {
+        // If Supabase fails (e.g., nonce mismatch on native iOS), fall back
+        // to verifying the token with Google directly
+        if (supabaseError instanceof AuthError && supabaseError.message.includes('nonce')) {
+          console.warn('[AuthService] Supabase nonce error, falling back to Google direct verification');
+        } else {
+          throw supabaseError;
         }
       }
-
-      return {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      };
     }
 
     // Firestore path: use google-auth-library OAuth2Client

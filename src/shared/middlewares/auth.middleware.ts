@@ -70,6 +70,18 @@ export const authenticate = async (
       const { data, error } = await supabase.auth.getUser(token);
 
       if (error || !data.user) {
+        // Fallback: try JWT verification (custom tokens from nonce-fallback path)
+        try {
+          const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string };
+          if (decoded.userId) {
+            userId = decoded.userId;
+            req.user = { userId };
+            next();
+            return;
+          }
+        } catch {
+          // Both verifications failed
+        }
         res.status(401).json({ message: 'Token inválido' });
         return;
       }
