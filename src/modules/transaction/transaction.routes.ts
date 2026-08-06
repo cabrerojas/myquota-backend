@@ -105,6 +105,16 @@ const createTransactionRouter = (): Router => {
   );
 
   router.get(
+    "/creditCards/:creditCardId/transactions/manual/quotas",
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.getManualTransactionsWithQuotas(
+        req,
+        res,
+      );
+    },
+  );
+
+  router.get(
     "/creditCards/:creditCardId/transactions/:transactionId",
     (req: Request, res: Response) => {
       return res.locals.transactionController.getTransaction(req, res);

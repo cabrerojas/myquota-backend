@@ -321,6 +321,41 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
   }
 
   /**
+   * getQuotasForTransactionIds — batch fetch quotas for multiple transactions.
+   * Replaces N individual getQuotas() calls with a single .in() query.
+   */
+  async getQuotasForTransactionIds(
+    transactionIds: string[],
+  ): Promise<Record<string, Quota[]>> {
+    if (transactionIds.length === 0) return {};
+
+    const { data, error } = await this.client()
+      .from('quotas')
+      .select('*')
+      .in('transaction_id', transactionIds)
+      .is('deleted_at', null)
+      .order('due_date', { ascending: true });
+
+    if (error) {
+      throw new RepositoryError(
+        `Error getting quotas: ${error.message}`,
+        500,
+      );
+    }
+
+    const quotas = (data as Record<string, unknown>[]).map((row) =>
+      this.mapQuotaRow(row),
+    );
+
+    const grouped: Record<string, Quota[]> = {};
+    for (const q of quotas) {
+      if (!grouped[q.transactionId]) grouped[q.transactionId] = [];
+      grouped[q.transactionId].push(q);
+    }
+    return grouped;
+  }
+
+  /**
    * findManual — returns manual transactions + imported transactions with quotas.
    */
   async findManual(): Promise<Transaction[]> {

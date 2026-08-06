@@ -286,6 +286,34 @@ export class TransactionService extends BaseService<Transaction> {
     return this.manualTransactionService.list();
   }
 
+  async getManualTransactionsWithQuotas(): Promise<{
+    transactions: Transaction[];
+    quotasByTx: Record<string, Quota[]>;
+  }> {
+    const transactions = await this.repository.findManual();
+    const txIds = transactions.map((tx) => tx.id);
+    const quotasByTx = await this.repository.getQuotasForTransactionIds(txIds);
+
+    const bpResult = await this.billingPeriodRepository.findAll();
+    const periods = bpResult.items;
+
+    for (const txId of Object.keys(quotasByTx)) {
+      for (const quota of quotasByTx[txId]) {
+        const dueTime = new Date(quota.dueDate).getTime();
+        const period = periods.find((p) => {
+          const start = new Date(p.startDate).getTime();
+          const end = new Date(p.endDate).getTime();
+          return dueTime >= start && dueTime <= end;
+        });
+        if (period?.dueDate) {
+          (quota as unknown as Record<string, unknown>).billingDueDate = period.dueDate;
+        }
+      }
+    }
+
+    return { transactions, quotasByTx };
+  }
+
   async initializeQuotasForAllTransactions(
     creditCardId: string,
     preloadedTransactions?: Transaction[],
