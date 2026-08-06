@@ -69,7 +69,8 @@ export class DebtForecastService {
         totalDebtCLP: number;
         totalDebtUSD: number;
       }>(cacheKey);
-      if (cached) return cached;
+      // Don't serve cached empty results — quotas may have been added
+      if (cached && cached.months.length > 0) return cached;
     }
 
     let allQuotas: (Quota & { transactionId: string; creditCardId: string })[] = [];
@@ -158,7 +159,10 @@ export class DebtForecastService {
         sortedPeriods,
       );
 
-      CacheService.set(cacheKey, result, 300);
+      // Only cache non-empty results
+      if (result.months.length > 0) {
+        CacheService.set(cacheKey, result, 300);
+      }
       return result;
     }
 
@@ -175,7 +179,9 @@ export class DebtForecastService {
     );
 
     if (!transactionsOverride || !transactionsOverride.length) {
-      CacheService.set(cacheKey, result, 300);
+      if (result.months.length > 0) {
+        CacheService.set(cacheKey, result, 300);
+      }
     }
     return result;
   }
