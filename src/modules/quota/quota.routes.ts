@@ -101,6 +101,14 @@ const createQuotaRouter = (): Router => {
     },
   );
 
+  router.get(
+    "/debt-forecast",
+    authenticate,
+    (req: Request, res: Response) => {
+      return QuotaController.getDebtForecast(req, res);
+    },
+  );
+
   return router;
 };
 
