@@ -313,7 +313,7 @@ export async function executePendingQuotasByUserQuery(
     `)
     .eq('status', 'pending')
     .is('deleted_at', null)
-    .in('transactions.credit_card_id', cardIds);
+    .is('transactions.deleted_at', null);
 
   if (error) {
     throw new Error(`[sql-queries] pending quotas query failed: ${error.message}`);
