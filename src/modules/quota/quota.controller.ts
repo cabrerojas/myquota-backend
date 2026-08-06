@@ -1,8 +1,33 @@
 import { Request, Response } from "express";
 import { QuotaService } from "./quota.service";
+import { DebtForecastService } from "./debtForecast.service";
 
 export class QuotaController {
   constructor(private readonly service: QuotaService) {}
+
+  static getDebtForecast = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        res.status(400).json({ message: "Falta userId." });
+        return;
+      }
+
+      const forecastService = new DebtForecastService(userId);
+      const result = await forecastService.getDebtForecast();
+      res.status(200).json(result);
+    } catch (error) {
+      console.error("Error obteniendo proyección de deuda:", error);
+      res.status(500).json({
+        message: "Error al obtener proyección de deuda",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
 
   addQuota = async (req: Request, res: Response): Promise<void> => {
     try {
