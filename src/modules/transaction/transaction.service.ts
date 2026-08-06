@@ -300,6 +300,10 @@ export class TransactionService extends BaseService<Transaction> {
 
     const created: number[] = await Promise.all(
       transactions.map(async (transaction) => {
+        // No crear cuota semilla si la transacción ya tiene cuotas reales
+        const existingQuotas = await this.repository.getQuotas(transaction.id);
+        if (existingQuotas.length > 0) return 0;
+
         const now = new Date();
         const quotaData: Quota = {
           id: transaction.id,
