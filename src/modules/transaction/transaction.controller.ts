@@ -383,6 +383,54 @@ export class TransactionController {
     }
   };
 
+  getManualTransactionsWithQuotas = async (
+    _req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { transactions, quotasByTx } =
+        await this.service.getManualTransactionsWithQuotas();
+
+      const userId = _req.user?.userId;
+      if (userId) {
+        try {
+          const categoryService = new CategoryService(userId);
+          const categories = await categoryService.getAllCategories();
+          const catMap = new Map(categories.map((c) => [c.id, c]));
+
+          const enriched = transactions.map((tx) => {
+            if (tx.categoryId && catMap.has(tx.categoryId)) {
+              const c = catMap.get(tx.categoryId)!;
+              return {
+                ...tx,
+                categoryName: c.name,
+                categoryIcon: c.icon,
+                categoryColor: c.color,
+              };
+            }
+            return tx;
+          });
+
+          res.status(200).json({ transactions: enriched, quotasByTx });
+          return;
+        } catch (e) {
+          console.warn(
+            "Could not enrich manual transactions with categories:",
+            e,
+          );
+        }
+      }
+
+      res.status(200).json({ transactions, quotasByTx });
+    } catch (error) {
+      console.error("Error getting manual transactions with quotas:", error);
+      res.status(500).json({
+        message: "Error al obtener transacciones manuales con cuotas",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
   getManualTransactions = async (
     _req: Request,
     res: Response,
