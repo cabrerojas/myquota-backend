@@ -296,48 +296,56 @@ export async function executePendingQuotasByUserQuery(
 
   const cardIds = cards.map((c) => c.id as string);
 
-  // Get all pending quotas for those cards with transaction info
-  const { data, error } = await supabase
+  // Get all pending quotas for those cards
+  // Query quotas and transactions separately to avoid Supabase JS nested join issues
+  const { data: quotas, error: quotasErr } = await supabase
     .from('quotas')
-    .select(`
-      id,
-      transaction_id,
-      amount,
-      currency,
-      due_date,
-      status,
-      transactions!inner(
-        merchant,
-        credit_card_id
-      )
-    `)
+    .select('id, transaction_id, amount, currency, due_date, status')
     .eq('status', 'pending')
     .is('deleted_at', null)
-    .is('transactions.deleted_at', null);
+    .in('credit_card_id', cardIds)
+    .order('due_date', { ascending: true });
 
-  if (error) {
-    throw new Error(`[sql-queries] pending quotas query failed: ${error.message}`);
+  if (quotasErr) {
+    throw new Error(`[sql-queries] pending quotas query failed: ${quotasErr.message}`);
   }
 
-  const cardIdSet = new Set(cardIds);
-  const result: RawPendingQuotaRow[] = [];
+  if (!quotas || quotas.length === 0) return [];
 
-  for (const row of data ?? []) {
-    // transactions is a nested select, so it's an array even with !inner
-    const txArray = row.transactions as unknown as Array<Record<string, unknown>>;
-    const tx = txArray?.[0];
-    const ccId = tx?.credit_card_id as string;
-    if (!ccId || !cardIdSet.has(ccId)) continue;
+  // Fetch transactions for the found quotas
+  const txIds = [...new Set(quotas.map((q) => q.transaction_id as string))];
+  const { data: txRows, error: txErr } = await supabase
+    .from('transactions')
+    .select('id, merchant, credit_card_id')
+    .in('id', txIds)
+    .is('deleted_at', null);
+
+  if (txErr) {
+    throw new Error(`[sql-queries] transactions query failed: ${txErr.message}`);
+  }
+
+  const txMap = new Map<string, { merchant: string; credit_card_id: string }>();
+  for (const tx of txRows ?? []) {
+    txMap.set(tx.id as string, {
+      merchant: (tx.merchant as string) ?? '',
+      credit_card_id: tx.credit_card_id as string,
+    });
+  }
+
+  const result: RawPendingQuotaRow[] = [];
+  for (const q of quotas) {
+    const tx = txMap.get(q.transaction_id as string);
+    if (!tx) continue;
 
     result.push({
-      id: row.id as string,
-      transaction_id: row.transaction_id as string,
-      amount: row.amount as number,
-      currency: row.currency as string,
-      due_date: row.due_date as string,
-      status: row.status as string,
-      merchant: (tx?.merchant as string) ?? '',
-      credit_card_id: ccId,
+      id: q.id as string,
+      transaction_id: q.transaction_id as string,
+      amount: q.amount as number,
+      currency: q.currency as string,
+      due_date: q.due_date as string,
+      status: q.status as string,
+      merchant: tx.merchant,
+      credit_card_id: tx.credit_card_id,
     });
   }
 
