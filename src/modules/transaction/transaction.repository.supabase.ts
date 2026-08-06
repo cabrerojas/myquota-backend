@@ -321,14 +321,14 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
   }
 
   /**
-   * findManual — returns all manual transactions for the credit card.
+   * findManual — returns manual transactions + imported transactions with quotas.
    */
   async findManual(): Promise<Transaction[]> {
     const { data, error } = await this.client()
       .from('transactions')
       .select('*')
       .eq('credit_card_id', this.creditCardId)
-      .eq('source', 'manual')
+      .or('source.eq.manual,and(source.eq.imported,total_installments.gt.1)')
       .is('deleted_at', null);
 
     if (error) {
