@@ -56,6 +56,7 @@ export class DebtForecastService {
    */
   public async getDebtForecast(
     transactionsOverride?: TransactionWithQuotas[],
+    force?: boolean,
   ): Promise<{
     months: MonthBucket[];
     totalDebtCLP: number;
@@ -63,7 +64,7 @@ export class DebtForecastService {
   }> {
     const cacheKey = `debtForecast:${this.userId}`;
 
-    if (!transactionsOverride || !transactionsOverride.length) {
+    if (!force && (!transactionsOverride || !transactionsOverride.length)) {
       const cached = CacheService.get<{
         months: MonthBucket[];
         totalDebtCLP: number;
