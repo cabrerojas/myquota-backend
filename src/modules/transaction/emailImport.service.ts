@@ -7,6 +7,7 @@ import { parseFirebaseDate } from "@/shared/utils/date.utils";
 import { getEnv } from "@config/env.validation";
 
 import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
+import { CreditCard } from "@modules/creditCard/creditCard.model";
 import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { Transaction } from "./transaction.model";
 import { AuthError } from "@shared/errors/custom.error";
@@ -20,7 +21,8 @@ export class EmailImportService {
     userId: string,
     creditCardRepository: CreditCardRepositorySupabase,
     categoryService: CategoryMatcher,
-  ): Promise<{ importedCount: number }> {
+    creditCardId?: string,
+  ): Promise<{ importedCount: number; importedTransactionIds: string[] }> {
     const tokenData = await getTokenFromFirestore(userId);
 
     if (!tokenData) {
@@ -72,24 +74,58 @@ export class EmailImportService {
 
     const gmail = google.gmail({ version: "v1", auth: oauthClient });
 
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const formattedDate = `${startOfMonth.getFullYear()}/${(
-      startOfMonth.getMonth() + 1
-    )
-      .toString()
-      .padStart(2, "0")}/${startOfMonth.getDate().toString().padStart(2, "0")}`;
-
-    const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
-    const res = await gmail.users.messages.list({ userId: "me", q: query });
-
-    if (!res.data.messages) {
-      return { importedCount: 0 };
+    let searchFromDate: Date | null;
+    if (creditCardId) {
+      const card = await creditCardRepository.findById(creditCardId);
+      searchFromDate = card?.lastEmailSyncAt ? new Date(card.lastEmailSyncAt) : null;
+    } else {
+      const ccResult = await creditCardRepository.findAll();
+      const dates = ccResult.items
+        .map(c => c.lastEmailSyncAt)
+        .filter((d): d is Date => !!d)
+        .map(d => new Date(d).getTime());
+      searchFromDate = dates.length > 0 ? new Date(Math.max(...dates)) : null;
     }
 
-    const messageIds = res.data.messages.map((message) => message.id!);
+    if (!searchFromDate) {
+      const today = new Date();
+      searchFromDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    }
+
+    const formattedDate = `${searchFromDate.getFullYear()}/${(
+      searchFromDate.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, "0")}/${searchFromDate.getDate().toString().padStart(2, "0")}`;
+
+    const query = `from:enviodigital@bancochile.cl subject:compra tarjeta crédito after:${formattedDate}`;
+    const messageIds: string[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const res = await gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults: 500,
+        pageToken,
+      });
+
+      if (res.data.messages) {
+        for (const msg of res.data.messages) {
+          if (msg.id) messageIds.push(msg.id);
+        }
+      }
+
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    if (messageIds.length === 0) {
+      return { importedCount: 0, importedTransactionIds: [] };
+    }
+
     const chunks = chunkArray(messageIds, 100);
     let totalImported = 0;
+    const importedIds: string[] = [];
 
     let merchantMap: MerchantCategoryMap;
     try {
@@ -163,6 +199,7 @@ export class EmailImportService {
               bank: "Banco de Chile",
               email: "enviodigital@bancochile.cl",
               creditCardId: "",
+              messageId,
               createdAt: new Date(),
               updatedAt: new Date(),
               deletedAt: null,
@@ -180,15 +217,28 @@ export class EmailImportService {
       ).filter((transaction): transaction is Transaction => !!transaction);
 
       if (batchData.length > 0) {
-        totalImported += await this.saveBatch(
+        const newIds = await this.saveBatch(
           creditCardRepository,
           transactionRepositoryByCard,
           batchData,
         );
+        totalImported += newIds.length;
+        importedIds.push(...newIds);
       }
     }
 
-    return { importedCount: totalImported };
+    if (creditCardId && totalImported > 0) {
+      try {
+        await creditCardRepository.update(creditCardId, { lastEmailSyncAt: new Date() } as Partial<CreditCard>);
+      } catch (e) {
+        console.error(
+          "Error actualizando last_email_sync_at:",
+          e instanceof Error ? e.message : "Error desconocido",
+        );
+      }
+    }
+
+    return { importedCount: totalImported, importedTransactionIds: importedIds };
   }
 
   private buildDeterministicTransactionId(params: {
@@ -223,7 +273,7 @@ export class EmailImportService {
     creditCardRepository: CreditCardRepositorySupabase,
     transactionRepositoryByCard: Map<string, TransactionRepositorySupabase>,
     transactions: Transaction[],
-  ): Promise<number> {
+  ): Promise<string[]> {
     const ccResult = await creditCardRepository.findAll();
     const creditCards = ccResult.items;
     const byLastDigits = new Map<string, string[]>();
@@ -234,12 +284,12 @@ export class EmailImportService {
       byLastDigits.set(card.cardLastDigits, existing);
     }
 
-    const createdFlags = await Promise.all(
+    const results = await Promise.all(
       transactions.map(async (transaction) => {
         const matchingCards = byLastDigits.get(transaction.cardLastDigits) ?? [];
 
         if (!matchingCards.length) {
-          return false;
+          return null;
         }
 
         const matchedCreditCardId = [...matchingCards].sort()[0];
@@ -250,14 +300,15 @@ export class EmailImportService {
         );
 
         if (!transactionRepository) {
-          return false;
+          return null;
         }
 
-        return transactionRepository.addIfAbsent(transaction);
+        await transactionRepository.addIfAbsent(transaction);
+        return transaction.id;
       }),
     );
 
-    return createdFlags.filter(Boolean).length;
+    return results.filter((id): id is string => id !== null);
   }
 
   private matchMerchantInMap(

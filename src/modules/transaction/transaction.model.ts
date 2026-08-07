@@ -18,5 +18,6 @@ export class Transaction implements IBaseEntity {
   // Campos para transacciones manuales
   source?: "email" | "manual";
   totalInstallments?: number;
-  paidInstallments?: number;
+    paidInstallments?: number;
+    messageId?: string;
 }
