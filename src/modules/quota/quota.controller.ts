@@ -17,8 +17,9 @@ export class QuotaController {
         return;
       }
 
+      const force = req.query.force === "true";
       const forecastService = new DebtForecastService(userId);
-      const result = await forecastService.getDebtForecast();
+      const result = await forecastService.getDebtForecast(undefined, force);
       res.status(200).json(result);
     } catch (error) {
       console.error("Error obteniendo proyección de deuda:", error);
