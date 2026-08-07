@@ -406,6 +406,7 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
       email: tx.email || null,
       total_installments: tx.totalInstallments || null,
       paid_installments: tx.paidInstallments || null,
+      message_id: tx.messageId || null,
       created_at: this.toIsoString(tx.createdAt) || now,
       updated_at: now,
       deleted_at: null,

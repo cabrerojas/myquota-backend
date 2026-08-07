@@ -22,4 +22,5 @@ export class CreditCard implements IBaseEntity {
     createdAt!: Date;
     updatedAt!: Date;
     deletedAt!: Date | null;
+    lastEmailSyncAt?: Date;
 }

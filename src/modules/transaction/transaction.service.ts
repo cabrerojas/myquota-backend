@@ -41,11 +41,12 @@ export class TransactionService extends BaseService<Transaction> {
     return this.repository.findAll(filters, pagination);
   }
 
-  async fetchBankEmails(userId: string): Promise<{ importedCount: number }> {
+  async fetchBankEmails(userId: string, creditCardId?: string) {
     return this.emailImportService.fetchBankEmails(
       userId,
       this.creditCardRepository,
       this.categoryMatcher,
+      creditCardId,
     );
   }
 
@@ -195,7 +196,7 @@ export class TransactionService extends BaseService<Transaction> {
       endDate: string;
     } | null;
   }> {
-    const { importedCount } = await this.fetchBankEmails(userId);
+    const { importedCount, importedTransactionIds } = await this.fetchBankEmails(userId, creditCardId);
 
     // Cortocircuito: si no hay correos nuevos, no ejecutar ninguna consulta adicional
     if (importedCount === 0) {
@@ -207,15 +208,18 @@ export class TransactionService extends BaseService<Transaction> {
       };
     }
 
-    // UN solo findAll() compartido por initializeQuotas y checkOrphans
-    // Usar límite alto para procesar TODAS las transacciones
-    const txResult = await this.repository.findAll(undefined, { limit: 10000 });
-    const transactions = txResult.items;
+    // Solo cargar las transacciones recién importadas para inicializar cuotas
+    // Esto evita escanear TODAS las transacciones del usuario
+    const importedTransactions: Transaction[] = [];
+    for (const id of importedTransactionIds) {
+      const tx = await this.repository.findById(id);
+      if (tx) importedTransactions.push(tx);
+    }
 
     const [quotasCreated, { orphanedTransactions, suggestedPeriod }] =
       await Promise.all([
-        this.initializeQuotasForAllTransactions(creditCardId, transactions),
-        this.checkOrphanedTransactions(transactions),
+        this.initializeQuotasForAllTransactions(creditCardId, importedTransactions),
+        this.checkOrphanedTransactions(importedTransactions),
       ]);
 
     return {

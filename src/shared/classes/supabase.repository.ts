@@ -175,6 +175,12 @@ export class SupabaseRepository<T extends IBaseEntity>
         case 'internationalAdvanceAvailable':
           row.international_advance_available = value;
           break;
+        case 'lastEmailSyncAt':
+          row.last_email_sync_at = value instanceof Date ? value.toISOString() : value;
+          break;
+        case 'messageId':
+          row.message_id = value;
+          break;
         case 'createdAt':
           row.created_at = value instanceof Date ? value.toISOString() : value;
           break;
@@ -296,6 +302,12 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'international_advance_available':
           entity.internationalAdvanceAvailable = value;
+          break;
+        case 'last_email_sync_at':
+          entity.lastEmailSyncAt = value ? new Date(value as string) : undefined;
+          break;
+        case 'message_id':
+          entity.messageId = value;
           break;
 
         // Timestamp fields
