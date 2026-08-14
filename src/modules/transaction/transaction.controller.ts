@@ -1,79 +1,40 @@
 import { Request, Response } from "express";
+import { AuthError, RepositoryError } from "@shared/errors/custom.error";
 import { TransactionService } from "./transaction.service";
-import { Transaction } from "./transaction.model";
-import { CategoryService } from "@/modules/category/category.service";
-import { StatsService } from "@/modules/stats/stats.service";
-import { AuthError } from "@shared/errors/custom.error";
 export class TransactionController {
   constructor(private readonly service: TransactionService) {}
 
   // Usar métodos de clase arrow functions para evitar problemas con el this
   getTransactions = async (req: Request, res: Response): Promise<void> => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-      const startAfter = req.query.startAfter as string | undefined;
-      const startDate = req.query.startDate as string | undefined;
-      const endDate = req.query.endDate as string | undefined;
-      const categoryId = req.query.categoryId as string | undefined;
+      const result = await this.service.listTransactions({
+        limit: req.query.limit as string | undefined,
+        startAfter: req.query.startAfter as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate: req.query.endDate as string | undefined,
+        categoryId: req.query.categoryId as string | undefined,
+      });
 
-      const filters: Partial<Transaction> = {};
-      if (categoryId) filters.categoryId = categoryId;
-
-      const result = await this.service.findAll(
-        Object.keys(filters).length > 0 ? filters : undefined,
-        { limit, startAfter, orderBy: "transactionDate", orderDirection: "desc", startDate, endDate }
-      );
-      const transactions = result.items;
-
-      // Category enrichment (uses L1 memory cache, 5-min TTL)
-      const userId = req.user?.userId;
-      if (userId) {
-        try {
-          const categoryService = new CategoryService(userId);
-          const categories = await categoryService.getAllCategories();
-          const catMap = new Map(categories.map((c) => [c.id, c]));
-          const enriched = transactions.map((tx) => {
-            if (tx.categoryId && catMap.has(tx.categoryId)) {
-              const c = catMap.get(tx.categoryId)!;
-              return {
-                ...tx,
-                categoryName: c.name,
-                categoryIcon: c.icon,
-                categoryColor: c.color,
-              };
-            }
-            return tx;
-          });
-          res.status(200).json({ items: enriched, metadata: result.metadata });
-          return;
-        } catch (e) {
-          console.warn("Could not enrich transactions with categories:", e);
-        }
-      }
-
-      res.status(200).json({ items: transactions, metadata: result.metadata });
+      res.status(200).json(result);
     } catch (error) {
       console.error("Error getting transactions:", error);
       res.status(500).json({
         message: "Error al obtener transacciones",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   addTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
-      const transaction = await this.service.create(req.body);
-      const userId = req.user?.userId;
-      if (userId)
-        StatsService.triggerRecompute(userId, req.params.creditCardId);
+      const transaction = await this.service.createTransaction(req.body, req.user?.userId);
 
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error adding transaction:", error);
       res.status(500).json({
         message: "Error al agregar transacción",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -81,32 +42,11 @@ export class TransactionController {
   getTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
       const { transactionId } = req.params;
-      const transaction = await this.service.findById(transactionId);
+      const transaction = await this.service.getTransactionDetails(transactionId);
 
       if (!transaction) {
         res.status(404).json({ message: "Transacción no encontrada" });
         return;
-      }
-
-      // Enriquecer con datos de categoría si existe
-      const userId = req.user?.userId;
-      if (userId && transaction.categoryId) {
-        try {
-          const categoryService = new CategoryService(userId);
-          const categories = await categoryService.getAllCategories();
-          const c = categories.find((cat) => cat.id === transaction.categoryId);
-          if (c) {
-            res.status(200).json({
-              ...transaction,
-              categoryName: c.name,
-              categoryIcon: c.icon,
-              categoryColor: c.color,
-            });
-            return;
-          }
-        } catch (e) {
-          console.warn("Could not enrich transaction with category:", e);
-        }
       }
 
       res.status(200).json(transaction);
@@ -114,7 +54,7 @@ export class TransactionController {
       console.error("Error getting transaction:", error);
       res.status(500).json({
         message: "Error al obtener la transacción",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -122,10 +62,10 @@ export class TransactionController {
   updateTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
       const { transactionId } = req.params;
-      const updatedData = req.body;
-      const updatedTransaction = await this.service.update(
+      const updatedTransaction = await this.service.updateTransaction(
         transactionId,
-        updatedData,
+        req.body,
+        req.user?.userId,
       );
 
       if (!updatedTransaction) {
@@ -133,74 +73,33 @@ export class TransactionController {
         return;
       }
 
-      // Enriquecer la transacción actualizada con datos de categoría si es posible
-      type EnrichedTransaction = Transaction & {
-        categoryName?: string;
-        categoryIcon?: string;
-        categoryColor?: string;
-      };
-
-      let responseData: EnrichedTransaction = { ...updatedTransaction };
-      const userId = req.user?.userId;
-      if (userId && updatedTransaction.categoryId) {
-        const categoryService = new CategoryService(userId);
-        try {
-          const categories = await categoryService.getAllCategories();
-          const c = categories.find(
-            (cat) => cat.id === updatedTransaction.categoryId,
-          );
-          if (c) {
-            responseData = {
-              ...updatedTransaction,
-              categoryName: c.name,
-              categoryIcon: c.icon,
-              categoryColor: c.color,
-            };
-          }
-        } catch (e) {
-          console.warn(
-            "Could not enrich updated transaction with category:",
-            e,
-          );
-        }
-
-        // Register the merchant→category mapping in the global registry
-        // so future imports auto-suggest this category for the same merchant.
-        if (updatedTransaction.merchant) {
-          try {
-            await categoryService.registerMerchantMapping(
-              updatedTransaction.categoryId,
-              updatedTransaction.merchant,
-              userId,
-            );
-          } catch (e) {
-            console.error("Error registering merchant mapping:", e);
-          }
-        }
-      }
-
-      if (userId) {
-        // If only categoryId changed, use lazy invalidation (cheap writes, 0 reads).
-        // The recompute fires naturally when the user next visits the affected report.
-        // For structural changes (amount, date, merchant, etc.) do a full eager recompute.
-        const isCategoryOnlyUpdate =
-          Object.keys(updatedData).length === 1 && "categoryId" in updatedData;
-        if (isCategoryOnlyUpdate) {
-          StatsService.triggerInvalidateOnly(userId, req.params.creditCardId);
-        } else {
-          StatsService.triggerRecompute(userId, req.params.creditCardId);
-        }
-      }
-
       res.status(200).json({
         message: "Transacción actualizada exitosamente",
-        data: responseData,
+        data: updatedTransaction,
       });
     } catch (error) {
       console.error("Error updating transaction:", error);
       res.status(500).json({
         message: "Error al actualizar la transacción",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
+  createRefund = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { transactionId } = req.params;
+      const result = await this.service.createRefund(transactionId, req.body, req.user?.userId);
+
+      res.status(201).json({
+        message: "Refund creado exitosamente",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error creating refund:", error);
+      const status = error instanceof RepositoryError ? error.statusCode : 500;
+      res.status(status).json({
+        message: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -208,23 +107,19 @@ export class TransactionController {
   deleteTransaction = async (req: Request, res: Response): Promise<void> => {
     try {
       const { transactionId } = req.params;
-      const result = await this.service.softDelete(transactionId);
+      const result = await this.service.deleteTransaction(transactionId, req.user?.userId);
 
       if (!result) {
         res.status(404).json({ message: "Transacción no encontrada" });
         return;
       }
 
-      const userId = req.user?.userId;
-      if (userId)
-        StatsService.triggerRecompute(userId, req.params.creditCardId);
-
       res.status(200).json({ message: "Transacción eliminada correctamente" });
     } catch (error) {
       console.error("Error deleting transaction:", error);
       res.status(500).json({
         message: "Error al eliminar la transacción",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -241,42 +136,11 @@ export class TransactionController {
         return;
       }
 
-      const {
-        merchant,
-        purchaseDate,
-        quotaAmount,
-        totalInstallments,
-        paidInstallments,
-        lastPaidMonth,
-        currency,
-      } = req.body;
-
-      if (
-        !merchant ||
-        !purchaseDate ||
-        !quotaAmount ||
-        !totalInstallments ||
-        paidInstallments === undefined ||
-        !lastPaidMonth ||
-        !currency
-      ) {
-        res.status(400).json({ message: "Faltan campos requeridos." });
-        return;
-      }
-
-      const result = await this.service.createManualTransaction(creditCardId, {
-        merchant,
-        purchaseDate,
-        quotaAmount,
-        totalInstallments,
-        paidInstallments,
-        lastPaidMonth,
-        currency,
-      });
-
-      const manualUserId = req.user?.userId;
-      if (manualUserId)
-        StatsService.triggerRecompute(manualUserId, creditCardId);
+      const result = await this.service.createManualTransaction(
+        creditCardId,
+        req.body,
+        req.user?.userId,
+      );
 
       res.status(201).json({
         message: `Transacción manual creada con ${result.quotasCreated} cuotas.`,
@@ -287,7 +151,7 @@ export class TransactionController {
       console.error("Error creating manual transaction:", error);
       res.status(500).json({
         message: "Error al crear transacción manual",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -301,9 +165,8 @@ export class TransactionController {
       const result = await this.service.deleteManualTransaction(
         creditCardId,
         transactionId,
+        req.user?.userId,
       );
-      const delUserId = req.user?.userId;
-      if (delUserId) StatsService.triggerRecompute(delUserId, creditCardId);
 
       res.status(200).json({
         message: `Transacción eliminada con ${result.deletedQuotas} cuotas.`,
@@ -311,12 +174,9 @@ export class TransactionController {
       });
     } catch (error) {
       console.error("Error deleting manual transaction:", error);
-      const status =
-        error instanceof Error && error.message.includes("Solo se pueden")
-          ? 400
-          : 500;
+      const status = error instanceof RepositoryError ? error.statusCode : 500;
       res.status(status).json({
-        message: error instanceof Error ? error.message : "Error al eliminar",
+        message: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -327,44 +187,12 @@ export class TransactionController {
   ): Promise<void> => {
     try {
       const { creditCardId, transactionId } = req.params;
-      const {
-        merchant,
-        purchaseDate,
-        quotaAmount,
-        totalInstallments,
-        paidInstallments,
-        lastPaidMonth,
-        currency,
-      } = req.body;
-
-      if (
-        !merchant ||
-        !quotaAmount ||
-        !totalInstallments ||
-        paidInstallments === undefined ||
-        !lastPaidMonth ||
-        !currency
-      ) {
-        res.status(400).json({ message: "Faltan campos requeridos." });
-        return;
-      }
-
       const result = await this.service.updateManualTransaction(
         creditCardId,
         transactionId,
-        {
-          merchant,
-          purchaseDate,
-          quotaAmount,
-          totalInstallments,
-          paidInstallments,
-          lastPaidMonth,
-          currency,
-        },
+        req.body,
+        req.user?.userId,
       );
-
-      const updUserId = req.user?.userId;
-      if (updUserId) StatsService.triggerRecompute(updUserId, creditCardId);
 
       res.status(200).json({
         message: `Transacción actualizada con ${result.quotasCreated} cuotas.`,
@@ -373,106 +201,43 @@ export class TransactionController {
       });
     } catch (error) {
       console.error("Error updating manual transaction:", error);
-      const status =
-        error instanceof Error && error.message.includes("Solo se pueden")
-          ? 400
-          : 500;
+      const status = error instanceof RepositoryError ? error.statusCode : 500;
       res.status(status).json({
-        message: error instanceof Error ? error.message : "Error al actualizar",
+        message: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   getManualTransactionsWithQuotas = async (
-    _req: Request,
+    req: Request,
     res: Response,
   ): Promise<void> => {
     try {
-      const { transactions, quotasByTx } =
-        await this.service.getManualTransactionsWithQuotas();
-
-      const userId = _req.user?.userId;
-      if (userId) {
-        try {
-          const categoryService = new CategoryService(userId);
-          const categories = await categoryService.getAllCategories();
-          const catMap = new Map(categories.map((c) => [c.id, c]));
-
-          const enriched = transactions.map((tx) => {
-            if (tx.categoryId && catMap.has(tx.categoryId)) {
-              const c = catMap.get(tx.categoryId)!;
-              return {
-                ...tx,
-                categoryName: c.name,
-                categoryIcon: c.icon,
-                categoryColor: c.color,
-              };
-            }
-            return tx;
-          });
-
-          res.status(200).json({ transactions: enriched, quotasByTx });
-          return;
-        } catch (e) {
-          console.warn(
-            "Could not enrich manual transactions with categories:",
-            e,
-          );
-        }
-      }
-
-      res.status(200).json({ transactions, quotasByTx });
+      const result = await this.service.getManualTransactionsWithQuotas();
+      res.status(200).json(result);
     } catch (error) {
       console.error("Error getting manual transactions with quotas:", error);
       res.status(500).json({
         message: "Error al obtener transacciones manuales con cuotas",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   getManualTransactions = async (
-    _req: Request,
+    req: Request,
     res: Response,
   ): Promise<void> => {
     try {
       const transactions = await this.service.getManualTransactions();
 
-      // Enriquecer con detalles de categoría si es posible
-      const userId = _req.user?.userId;
-      if (userId) {
-        try {
-          const categoryService = new CategoryService(userId);
-          const categories = await categoryService.getAllCategories();
-          const catMap = new Map(categories.map((c) => [c.id, c]));
-          const enriched = transactions.map((tx) => {
-            if (tx.categoryId && catMap.has(tx.categoryId)) {
-              const c = catMap.get(tx.categoryId)!;
-              return {
-                ...tx,
-                categoryName: c.name,
-                categoryIcon: c.icon,
-                categoryColor: c.color,
-              };
-            }
-            return tx;
-          });
-          res.status(200).json(enriched);
-          return;
-        } catch (e) {
-          console.warn(
-            "Could not enrich manual transactions with categories:",
-            e,
-          );
-        }
-      }
-
       res.status(200).json(transactions);
     } catch (error) {
       console.error("Error getting manual transactions:", error);
-      res
-        .status(500)
-        .json({ message: "Error al obtener transacciones manuales" });
+      res.status(500).json({
+        message: "Error al obtener transacciones manuales",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
     }
   };
 
@@ -499,11 +264,6 @@ export class TransactionController {
         suggestedPeriod,
       } = await this.service.runImportFlow(userId, creditCardId);
 
-      // Solo recomputar reportes si realmente se importaron transacciones nuevas
-      if (importedCount > 0) {
-        StatsService.triggerRecompute(userId, creditCardId);
-      }
-
       res.status(200).json({
         message: "Transacciones importadas exitosamente",
         importedCount,
@@ -522,7 +282,7 @@ export class TransactionController {
 
       res.status(500).json({
         message: "Error al importar transacciones",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
       return;
     }
@@ -535,10 +295,11 @@ export class TransactionController {
     const { creditCardId } = req.params; // Obtener userId y creditCardId de la URL
 
     try {
-      const quotasCreated =
-        await this.service.initializeQuotasForAllTransactions(creditCardId);
-      const userId = req.user?.userId;
-      if (userId) StatsService.triggerRecompute(userId, creditCardId);
+      const quotasCreated = await this.service.initializeQuotasForAllTransactions(
+        creditCardId,
+        undefined,
+        req.user?.userId,
+      );
       res.status(200).json({
         message:
           "Cuotas creadas para todas las transacciones que no las tenían previamente.",
@@ -551,7 +312,7 @@ export class TransactionController {
       );
       res.status(500).json({
         message: "Error al inicializar cuotas para todas las transacciones",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };

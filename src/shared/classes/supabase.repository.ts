@@ -2,10 +2,11 @@
 // Base Supabase repository implementing IBaseRepository<T>
 // Replaces FirestoreRepository<T> when USE_SUPABASE=true
 
+import { SupabaseClient } from '@supabase/supabase-js';
+
+import { getSupabaseAdmin } from '@/config/supabase';
 import { RepositoryError } from '@/shared/errors/custom.error';
 import { IBaseEntity, IBaseRepository } from '@/shared/interfaces/base.repository';
-import { getSupabaseAdmin } from '@/config/supabase';
-import { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Pagination parameters for cursor-based pagination in Supabase.
@@ -90,6 +91,9 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'transactionId':
           row.transaction_id = value;
+          break;
+        case 'parentTransactionId':
+          row.parent_transaction_id = value;
           break;
         case 'billingPeriodId':
           row.billing_period_id = value;
@@ -181,6 +185,9 @@ export class SupabaseRepository<T extends IBaseEntity>
         case 'messageId':
           row.message_id = value;
           break;
+        case 'refundReason':
+          row.refund_reason = value;
+          break;
         case 'createdAt':
           row.created_at = value instanceof Date ? value.toISOString() : value;
           break;
@@ -225,6 +232,9 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'transaction_id':
           entity.transactionId = value;
+          break;
+        case 'parent_transaction_id':
+          entity.parentTransactionId = value;
           break;
         case 'billing_period_id':
           entity.billingPeriodId = value;
@@ -308,6 +318,9 @@ export class SupabaseRepository<T extends IBaseEntity>
           break;
         case 'message_id':
           entity.messageId = value;
+          break;
+        case 'refund_reason':
+          entity.refundReason = value;
           break;
 
         // Timestamp fields

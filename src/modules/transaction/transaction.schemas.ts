@@ -20,6 +20,18 @@ export const createTransactionSchema = z
 
 export const updateTransactionSchema = createTransactionSchema.partial();
 
+export const createRefundSchema = z
+  .object({
+    amount: z.number().positive(),
+    transactionDate: z.string().or(z.coerce.date()).optional(),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export const initializeQuotasSchema = z.object({}).strict();
+
+export const importBankTransactionsSchema = z.object({}).strict();
+
 export const createManualTransactionSchema = z
   .object({
     merchant: z.string().min(1),
@@ -27,10 +39,14 @@ export const createManualTransactionSchema = z
     quotaAmount: z.number().min(0),
     totalInstallments: z.number().int().min(1),
     paidInstallments: z.number().int().min(0),
-    lastPaidMonth: z.string().optional(),
+    lastPaidMonth: z.string().regex(/^\d{4}-\d{2}$/),
     currency: z.string().min(1),
+    categoryId: z.string().min(1).optional(),
+  })
+  .refine((data) => data.paidInstallments <= data.totalInstallments, {
+    path: ["paidInstallments"],
+    message: "paidInstallments no puede ser mayor a totalInstallments",
   })
   .strict();
 
-export const updateManualTransactionSchema =
-  createManualTransactionSchema.partial();
+export const updateManualTransactionSchema = createManualTransactionSchema;

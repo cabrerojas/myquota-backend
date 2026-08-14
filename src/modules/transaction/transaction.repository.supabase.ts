@@ -8,9 +8,9 @@ import {
   QueryResult,
   camelToSnake,
 } from '@/shared/classes/supabase.repository';
-import { Transaction } from './transaction.model';
-import { Quota } from '@/modules/quota/quota.model';
 import { RepositoryError } from '@/shared/errors/custom.error';
+import { Quota } from '@/modules/quota/quota.model';
+import { Transaction, TransactionRefund } from './transaction.model';
 
 /** Extended pagination params that support date-range filtering at the SQL level. */
 export interface TransactionPaginationParams extends PaginationParams {
@@ -35,6 +35,7 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
       .from(this.tableName)
       .select('*', { count: 'exact' })
       .eq('credit_card_id', this.creditCardId)
+      .is('parent_transaction_id', null)
       .is('deleted_at', null);
 
     // Date-range filters pushed to SQL (replaces in-memory post-filter)
@@ -125,6 +126,45 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
     return (data as Record<string, unknown>[]).map((row) =>
       this.mapQuotaRow(row),
     );
+  }
+
+  async findRefundsByParentIds(
+    parentTransactionIds: string[],
+  ): Promise<Record<string, TransactionRefund[]>> {
+    if (parentTransactionIds.length === 0) return {};
+
+    const { data, error } = await this.client()
+      .from('transactions')
+      .select('*')
+      .eq('credit_card_id', this.creditCardId)
+      .in('parent_transaction_id', parentTransactionIds)
+      .is('deleted_at', null)
+      .order('transaction_date', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw new RepositoryError(`Error getting refunds: ${error.message}`, 500);
+    }
+
+    const grouped: Record<string, TransactionRefund[]> = {};
+    for (const row of (data || []) as Record<string, unknown>[]) {
+      const refund = this.mapRowToEntity(row) as Transaction;
+      const parentTransactionId = refund.parentTransactionId;
+
+      if (!parentTransactionId) continue;
+      if (!grouped[parentTransactionId]) grouped[parentTransactionId] = [];
+
+      grouped[parentTransactionId].push({
+        id: refund.id,
+        amount: Math.abs(refund.amount),
+        currency: refund.currency,
+        transactionDate: refund.transactionDate,
+        createdAt: refund.createdAt,
+        refundReason: refund.refundReason,
+      });
+    }
+
+    return grouped;
   }
 
   /**
@@ -363,6 +403,7 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
       .from('transactions')
       .select('*')
       .eq('credit_card_id', this.creditCardId)
+      .is('parent_transaction_id', null)
       .or('source.eq.manual,and(source.eq.imported,total_installments.gt.1)')
       .is('deleted_at', null);
 
