@@ -1,17 +1,21 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { authenticate } from "@/shared/middlewares/auth.middleware";
+import { validate } from "@shared/middlewares/validate.middleware";
+import { CategoryService } from "@/modules/category/category.service";
+import { BillingPeriodRepositorySupabase } from "@modules/billingPeriod/billingPeriod.repository.supabase";
+import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
+
 import { TransactionController } from "./transaction.controller";
 import { TransactionRepositorySupabase } from "./transaction.repository.supabase";
 import { TransactionService } from "./transaction.service";
-import { authenticate } from "@/shared/middlewares/auth.middleware";
-import { BillingPeriodRepositorySupabase } from "@modules/billingPeriod/billingPeriod.repository.supabase";
-import { CreditCardRepositorySupabase } from "@modules/creditCard/creditCard.repository.supabase";
-import { CategoryService } from "@/modules/category/category.service";
-import { validate } from "@shared/middlewares/validate.middleware";
 import {
   createTransactionSchema,
-  updateTransactionSchema,
+  createRefundSchema,
   createManualTransactionSchema,
+  importBankTransactionsSchema,
+  initializeQuotasSchema,
   updateManualTransactionSchema,
+  updateTransactionSchema,
 } from "./transaction.schemas";
 
 const createTransactionRouter = (): Router => {
@@ -44,6 +48,7 @@ const createTransactionRouter = (): Router => {
           transactionRepository,
           billingPeriodRepository,
           creditCardRepository,
+          categoryService,
           categoryMatcher,
         );
         const controller = new TransactionController(service);
@@ -137,7 +142,16 @@ const createTransactionRouter = (): Router => {
   );
 
   router.post(
+    "/creditCards/:creditCardId/transactions/:transactionId/refunds",
+    validate(createRefundSchema),
+    (req: Request, res: Response) => {
+      return res.locals.transactionController.createRefund(req, res);
+    },
+  );
+
+  router.post(
     "/creditCards/:creditCardId/transactions/initialize-quotas",
+    validate(initializeQuotasSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.initializeQuotasForAllTransactions(
         req,
@@ -148,6 +162,7 @@ const createTransactionRouter = (): Router => {
 
   router.post(
     "/creditCards/:creditCardId/transactions/import-bank-transactions",
+    validate(importBankTransactionsSchema),
     (req: Request, res: Response) => {
       return res.locals.transactionController.importBankTransactions(req, res);
     },

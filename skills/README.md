@@ -1,93 +1,42 @@
 # AI Agent Skills — MyQuota Backend
 
-Este directorio contiene **Agent Skills** que proporcionan patrones específicos del proyecto para asistentes de IA (GitHub Copilot, Claude, etc.).
-
-## ¿Qué son los Skills?
-
-Los Skills enseñan a los agentes IA cómo realizar tareas específicas en este proyecto. Cuando un agente carga un skill, obtiene contexto sobre:
-
-- Reglas críticas (qué hacer siempre / qué nunca hacer)
-- Patrones de código y convenciones
-- Templates y ejemplos
-- Referencias a documentación local
+This directory contains project-specific skills for repo-aware agents.
 
 ## Setup
 
-Ejecuta el script de setup para configurar los skills:
+Run:
 
 ```bash
 ./skills/setup.sh
 ```
 
-Esto copia `AGENTS.md` a `.github/copilot-instructions.md` para compatibilidad con GitHub Copilot.
+This keeps `AGENTS.md` and `.github/copilot-instructions.md` aligned for Copilot and other repo-aware agents.
 
-## Cómo usar los Skills
+## Available Skills
 
-Los skills se invocan automáticamente según la tarea. Ver la tabla **Auto-invoke Skills** en `AGENTS.md` para saber cuándo se activa cada uno.
+| Skill | Description |
+| --- | --- |
+| `myquota-module` | Module layering and boilerplate |
+| `myquota-repository` | SupabaseRepository and SQL persistence patterns |
+| `myquota-service` | Service and orchestration patterns |
+| `myquota-controller` | Thin controllers with error handling |
+| `myquota-routes` | Route wiring, auth, and validation |
+| `myquota-auth` | Supabase Auth, middleware, refresh/logout flows |
+| `myquota-dates` | Date and timezone handling |
+| `myquota-cache` | In-memory cache and SQL query optimization |
+| `sync-types` | Backend/frontend type sync |
 
-También puedes invocar un skill manualmente:
+## Maintenance
 
-```
-Lee skills/myquota-module/SKILL.md
-```
+When you change a skill or repo-wide guidance:
 
-## Skills Disponibles
+1. Update the relevant `SKILL.md` or `AGENTS.md`.
+2. Keep `.github/copilot-instructions.md` aligned.
+3. Run `./skills/skill-sync/assets/sync.sh` if auto-invoke metadata changed.
+4. Run `./skills/setup.sh` if Copilot instructions need to be refreshed.
 
-### MyQuota-Specific Skills
+## Design Principles
 
-| Skill                | Descripción                                 |
-| -------------------- | ------------------------------------------- |
-| `myquota-module`     | Crear módulos completos (model→routes)      |
-| `myquota-repository` | FirestoreRepository patterns                |
-| `myquota-service`    | Patrones de servicios y BaseService         |
-| `myquota-controller` | Controllers con try/catch y arrow functions |
-| `myquota-routes`     | DI por request con res.locals               |
-| `myquota-auth`       | JWT auth, middleware, refresh tokens        |
-| `myquota-dates`      | Chile timezone, ISO strings                 |
-| `myquota-cache`      | 3-level cache (L1→L2→L3)                    |
-| `sync-types`         | Sincronizar tipos backend→frontend          |
-
-### Meta Skills
-
-| Skill        | Descripción                                |
-| ------------ | ------------------------------------------ |
-| `skill-sync` | Sincroniza Auto-invoke tables en AGENTS.md |
-
-## Estructura de Directorio
-
-```
-skills/
-├── README.md              # Este archivo
-├── setup.sh               # Configura skills para diferentes herramientas IA
-├── skill-sync/
-│   ├── SKILL.md           # Instrucciones del skill
-│   └── assets/sync.sh     # Script de sincronización
-├── myquota-module/
-│   └── SKILL.md
-├── myquota-repository/
-│   └── SKILL.md
-└── ...
-```
-
-## Crear Nuevos Skills
-
-1. Crear directorio: `skills/{skill-name}/`
-2. Agregar `SKILL.md` con frontmatter requerido
-3. Agregar `metadata.auto_invoke` si debe activarse automáticamente
-4. Ejecutar `./skills/skill-sync/assets/sync.sh` para actualizar AGENTS.md
-5. Ejecutar `./skills/setup.sh` para actualizar copilot-instructions.md
-
-### Checklist para nuevo Skill
-
-- [ ] `SKILL.md` con frontmatter YAML válido
-- [ ] Campo `name` coincide con nombre del directorio
-- [ ] Campo `description` incluye trigger phrase
-- [ ] `metadata.auto_invoke` definido si aplica
-- [ ] Ejecutar sync.sh después de crear
-
-## Principios de Diseño
-
-- **Conciso**: Solo incluir lo que el agente no sabe
-- **Divulgación progresiva**: Apuntar a docs detallados, no duplicar
-- **Reglas críticas primero**: Empezar con patrones SIEMPRE/NUNCA
-- **Ejemplos mínimos**: Mostrar patrones, no tutoriales
+- Prefer focused, current guidance over historical implementation notes.
+- Preserve repo conventions: layering, validation, error handling, import order, and thin controllers.
+- Do not teach Firestore-era persistence or cache patterns as active architecture.

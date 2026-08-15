@@ -1,204 +1,117 @@
 ---
 name: myquota-repository
 description: >
-  Patrones de FirestoreRepository: paths, subcolecciones, métodos CRUD, sanitización de timestamps.
-  Trigger: Cuando se crea un repositorio, se trabaja con paths de Firestore, o se necesitan métodos custom.
+  SupabaseRepository patterns: table ownership, SQL-level filters, CRUD methods, and camelCase/snake_case mapping.
+  Trigger: When creating a repository, working with Supabase/Postgres persistence, or adding custom repository methods.
 license: MIT
 metadata:
   author: myquota
-  version: "1.0"
+  version: "1.1"
   auto_invoke:
     - "Creating a repository"
-    - "Working with Firestore paths"
+    - "Working with Supabase repositories"
     - "Adding custom repository methods"
 ---
 
-## Propósito
+## Purpose
 
-Crear y extender repositorios en MyQuota usando `FirestoreRepository<T>` como base. Los repositorios manejan toda la persistencia en Firestore.
+Use `SupabaseRepository<T>` as the default base class for persistence in MyQuota. Repositories own one table or a tightly-scoped persistence boundary.
 
----
-
-## Patrón Base
+## Base Pattern
 
 ```typescript
-import { FirestoreRepository } from "@shared/classes/firestore.repository";
+import { SupabaseRepository } from "@shared/classes/supabase.repository";
 import { MyEntity } from "./myEntity.model";
 
-export class MyEntityRepository extends FirestoreRepository<MyEntity> {
-  constructor(userId: string) {
-    super(["users", userId], "myEntities");
+export class MyEntityRepository extends SupabaseRepository<MyEntity> {
+  constructor() {
+    super("my_entities");
   }
 }
 ```
 
----
+## Rules
 
-## Regla de Path
+- Pass the real Postgres table or view name to `super()`.
+- Keep entity fields camelCase. The base repository maps common snake_case DB columns.
+- Push filtering, ordering, pagination, and range constraints down to SQL/repository level.
+- Do not fetch broad result sets and filter in memory when SQL can express the predicate.
+- A repository must not depend on another repository. Cross-module orchestration belongs in services or dedicated SQL helpers.
 
-El array `path` del constructor representa pares `[collection, docId, collection, docId, ...]` que conducen al documento padre. `collectionName` es la colección final.
+## Current Persistence Shape
 
-```typescript
-// users/{userId}/creditCards/{creditCardId}/transactions
-super(["users", userId, "creditCards", creditCardId], "transactions");
+Core tables currently include:
 
-// users/{userId}/creditCards
-super(["users", userId], "creditCards");
+- `users`
+- `credit_cards`
+- `transactions`
+- `quotas`
+- `billing_periods`
+- `categories`
+- `user_tokens`
+- `revoked_tokens`
 
-// Colección raíz (users)
-super([], "users");
-```
+## Inherited Methods
 
----
+| Method | Signature | Notes |
+| --- | --- | --- |
+| `create` | `(data) => Promise<T>` | Adds id and timestamps |
+| `findAll` | `(filters?, pagination?) => Promise<QueryResult<T>>` | Uses soft-delete filter and pagination |
+| `findById` | `(id) => Promise<T \| null>` | Returns `null` when not found |
+| `findOne` | `(filters) => Promise<T \| null>` | Equality filters only |
+| `update` | `(id, data) => Promise<T \| null>` | Updates `updated_at` |
+| `delete` | `(id) => Promise<boolean>` | Hard delete |
+| `softDelete` | `(id) => Promise<boolean>` | Sets `deleted_at` |
 
-## Estructura Actual de Firestore
-
-```
-users/
-├── {userId}/
-│   ├── creditCards/
-│   │   ├── {creditCardId}/
-│   │   │   ├── transactions/
-│   │   │   │   ├── {transactionId}/
-│   │   │   │   │   └── quotas/
-│   │   │   │   │       └── {quotaId}
-│   │   │   └── billingPeriods/
-│   │   │       └── {billingPeriodId}
-│   └── categories/
-│       └── {categoryId}
-│
-categories/                    # Globales (sin userId)
-├── {categoryId}/
-│   └── merchants/
-│       └── {merchantId}
-```
-
----
-
-## Métodos Heredados de FirestoreRepository
-
-| Método       | Firma                                                  | Descripción                  |
-| ------------ | ------------------------------------------------------ | ---------------------------- |
-| `create`     | `(data: Omit<T, keyof IBaseEntity>) => Promise<T>`     | Crea con id, timestamps auto |
-| `findAll`    | `(filters?: Partial<T>) => Promise<T[]>`               | Todos (excluye soft-deleted) |
-| `findById`   | `(id: string) => Promise<T \| null>`                   | Por ID                       |
-| `findOne`    | `(filters: Partial<T>) => Promise<T \| null>`          | Primero que coincida         |
-| `update`     | `(id: string, data: Partial<T>) => Promise<T \| null>` | Actualiza + updatedAt        |
-| `delete`     | `(id: string) => Promise<boolean>`                     | Eliminación física           |
-| `softDelete` | `(id: string) => Promise<boolean>`                     | Asigna deletedAt             |
-
----
-
-## Métodos Custom
-
-Para agregar métodos específicos del dominio:
+## Custom Method Pattern
 
 ```typescript
-export class TransactionRepository extends FirestoreRepository<Transaction> {
-  constructor(userId: string, creditCardId: string) {
-    super(["users", userId, "creditCards", creditCardId], "transactions");
+import {
+  QueryResult,
+  SupabaseRepository,
+} from "@shared/classes/supabase.repository";
+
+export class TransactionRepository extends SupabaseRepository<Transaction> {
+  constructor() {
+    super("transactions");
   }
 
-  async findByDateRange(
-    startDate: Date,
-    endDate: Date,
-  ): Promise<Transaction[]> {
-    const all = await this.findAll();
-    return all.filter((t) => {
-      const date = new Date(t.transactionDate);
-      return date >= startDate && date <= endDate;
-    });
-  }
-
-  async findPending(): Promise<Transaction[]> {
-    return this.findAll({ status: "pending" } as Partial<Transaction>);
-  }
-}
-```
-
----
-
-## Sanitización de Timestamps
-
-Al **leer** de Firestore, los Timestamps se convierten a ISO strings:
-
-```typescript
-// Interno en FirestoreRepository
-sanitizeTimestamps(data: T): T {
-  // Convierte Timestamp y Date a ISO strings
-}
-```
-
-Al **escribir** en Firestore, las Dates se convierten a ISO strings:
-
-```typescript
-// Interno en FirestoreRepository
-datesToIsoStrings(data: Partial<T>): Record<string, unknown> {
-  // Convierte Date a ISO strings, elimina undefined
-}
-```
-
-Si sobrescribes métodos del base, DEBES llamar a estas funciones:
-
-```typescript
-async customFind(): Promise<MyEntity[]> {
-  const snapshot = await this.collection.get();
-  return snapshot.docs.map(doc =>
-    this.sanitizeTimestamps({ id: doc.id, ...doc.data() } as MyEntity)
-  );
-}
-
-async customCreate(data: Partial<MyEntity>): Promise<MyEntity> {
-  const sanitized = this.datesToIsoStrings(data);
-  // ... write to Firestore
-}
-```
-
----
-
-## Regla de Límites
-
-**Un repositorio gestiona SOLO su colección y sus subcolecciones directas.** NO importar ni depender de otros repositorios.
-
-Acceder a subcollections dentro de la jerarquía propia está permitido (e.g., TransactionRepository accediendo a `quotas` que es subcolección de transactions).
-
-```typescript
-// ❌ INCORRECTO: Repository importando otro repository
-import { CreditCardRepository } from "@modules/creditCard/creditCard.repository";
-
-class TransactionRepository {
-  constructor(
-    userId: string,
+  async findPendingByCreditCard(
     creditCardId: string,
-    private creditCardRepo: CreditCardRepository, // NO
-  ) { ... }
-}
-
-// ✅ CORRECTO: Acceder a subcollection propia (quotas dentro de transactions)
-class TransactionRepository {
-  getQuotasCollection(transactionId: string) {
-    return this.repository.doc(transactionId).collection("quotas");
+  ): Promise<QueryResult<Transaction>> {
+    return this.findAll(
+      { creditCardId, status: "pending" } as Partial<Transaction>,
+      { orderBy: "transactionDate", orderDirection: "desc", limit: 100 },
+    );
   }
-}
-
-// ✅ CORRECTO: Cross-module access via service (DI)
-class TransactionService {
-  constructor(
-    private transactionRepo: TransactionRepository,
-    private creditCardRepo: CreditCardRepository, // Inyectado desde routes
-  ) {}
 }
 ```
 
-**Regla clave**: Si necesitas datos de otra colección, inyéctalos como dependencia del **service**, no del repository.
+## Mapping Rule
 
----
+If you override base behavior, preserve the base mapping layer.
+
+```typescript
+protected override mapRowToEntity(row: Record<string, unknown>): MyEntity {
+  const entity = super.mapRowToEntity(row);
+  return {
+    ...entity,
+    customField: row.custom_field as string,
+  };
+}
+```
+
+## Never
+
+- Never import another repository into a repository.
+- Never read `process.env` in repositories.
+- Never add business rules that belong in services.
+- Never keep Firestore-era path or subcollection patterns in new repository guidance.
 
 ## Checklist
 
-- [ ] Extiende `FirestoreRepository<T>`
-- [ ] Constructor recibe IDs dinámicos necesarios
-- [ ] Path correcto: pares [collection, docId, ...]
-- [ ] CollectionName es la colección final
-- [ ] Métodos custom llaman a sanitizeTimestamps/datesToIsoStrings
-- [ ] NO accede a subcolecciones de otras entidades
+- [ ] Extends `SupabaseRepository<T>` unless a dedicated SQL helper is justified
+- [ ] Uses the correct table/view name in `super()`
+- [ ] Pushes filters and pagination into SQL
+- [ ] Preserves camelCase/snake_case mapping when overriding base behavior
+- [ ] Does not depend on other repositories for cross-module reads
