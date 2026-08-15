@@ -209,7 +209,7 @@ export class TransactionController {
   };
 
   getManualTransactionsWithQuotas = async (
-    req: Request,
+    _req: Request,
     res: Response,
   ): Promise<void> => {
     try {
@@ -225,7 +225,7 @@ export class TransactionController {
   };
 
   getManualTransactions = async (
-    req: Request,
+    _req: Request,
     res: Response,
   ): Promise<void> => {
     try {
