@@ -69,7 +69,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
   async create(
     data: Omit<BillingPeriod, keyof IBaseEntity>,
   ): Promise<BillingPeriod> {
-    const result = await super.create(this.normalizeDates(data));
+    const result = await super.create(this.normalizeBillingPeriod(data));
     // Invalidate cache after create
     if (this.userId && this.creditCardId) {
       CacheService.invalidate(
@@ -86,7 +86,7 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     id: string,
     data: Partial<Omit<BillingPeriod, keyof IBaseEntity>>,
   ): Promise<BillingPeriod | null> {
-    const result = await super.update(id, this.normalizeDates(data));
+    const result = await super.update(id, this.normalizeBillingPeriod(data));
     // Invalidate cache after update
     if (this.userId && this.creditCardId) {
       CacheService.invalidate(
@@ -139,6 +139,33 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
       );
     }
     return normalized;
+  }
+
+  private normalizeBillingPeriod<
+    D extends {
+      month?: string;
+      startDate?: Date | string;
+      endDate?: Date | string;
+      dueDate?: Date | string;
+    },
+  >(data: D): D {
+    const normalized = this.normalizeDates(data);
+
+    if (normalized.month !== undefined) {
+      (normalized as Record<string, unknown>).month = this.normalizeMonth(
+        normalized.month,
+      );
+    }
+
+    return normalized;
+  }
+
+  private normalizeMonth(month: string): string {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new Error("Month must use the YYYY-MM format");
+    }
+
+    return month;
   }
 
   /**
