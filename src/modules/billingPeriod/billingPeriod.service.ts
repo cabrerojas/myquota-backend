@@ -7,20 +7,18 @@ import {
   CacheKeys,
 } from "@/shared/services/cache.service";
 import { PaginationParams, QueryResult } from "@/shared/classes/supabase.repository";
-import { TransactionRepositorySupabase } from "@/modules/transaction/transaction.repository.supabase";
 import { BillingPeriodRepositorySupabase } from "./billingPeriod.repository.supabase";
-import { QuotaRepositorySupabase } from "@/modules/quota/quota.repository.supabase";
+import { BillingPeriodSettlementOutcome } from "./billingPeriod.repository.supabase";
+import { StatsService } from "@/modules/stats/stats.service";
 import { BillingPeriod } from "./billingPeriod.model";
 
 export class BillingPeriodService extends BaseService<BillingPeriod> {
   protected repository: BillingPeriodRepositorySupabase;
-  private transactionRepository: TransactionRepositorySupabase | null = null;
   private creditCardId: string;
   private userId?: string;
 
   constructor(
     repository: BillingPeriodRepositorySupabase,
-    transactionRepository?: TransactionRepositorySupabase,
     creditCardId?: string,
     userId?: string,
   ) {
@@ -28,9 +26,6 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     this.repository = repository;
     this.creditCardId = creditCardId || "";
     this.userId = userId;
-    if (transactionRepository) {
-      this.transactionRepository = transactionRepository;
-    }
   }
 
   /**
@@ -168,49 +163,18 @@ export class BillingPeriodService extends BaseService<BillingPeriod> {
     return month;
   }
 
-  /**
-   * Mark as paid all pending quotas whose dueDate falls within the billing period range.
-   */
-  async payBillingPeriod(
+  async settleBillingPeriod(
     billingPeriodId: string,
-  ): Promise<{ paidCount: number; totalAmount: number }> {
-    if (!this.transactionRepository) {
-      throw new Error("TransactionRepository no disponible");
+  ): Promise<BillingPeriodSettlementOutcome> {
+    if (!this.userId || !this.creditCardId) {
+      throw new Error("User and credit card are required to settle a billing period");
     }
 
-    const period = await this.findById(billingPeriodId);
-    if (!period) {
-      throw new Error("Período de facturación no encontrado");
-    }
-
-    const startDate = new Date(period.startDate).getTime();
-    const endDate = new Date(period.endDate).getTime();
-
-    const txResult = await this.transactionRepository.findAll();
-    const transactions = txResult.items;
-
-    let paidCount = 0;
-    let totalAmount = 0;
-    const paymentDate = new Date().toISOString();
-
-    const quotaRepo = new QuotaRepositorySupabase();
-
-    for (const tx of transactions) {
-      const quotas = await this.transactionRepository.getQuotas(tx.id);
-
-      const pendingInRange = quotas.filter((q: { status: string; dueDate: Date | string }) => {
-        if (q.status !== "pending") return false;
-        const dueTime = new Date(q.dueDate).getTime();
-        return dueTime >= startDate && dueTime <= endDate;
-      });
-
-      for (const quota of pendingInRange) {
-        await quotaRepo.markAsPaid(quota.id, new Date(paymentDate));
-        paidCount++;
-        totalAmount += quota.amount;
-      }
-    }
-
-    return { paidCount, totalAmount };
+    const outcome = await this.repository.settleBillingPeriod(
+      billingPeriodId,
+      this.userId,
+    );
+    StatsService.triggerRecompute(this.userId, this.creditCardId);
+    return outcome;
   }
 }

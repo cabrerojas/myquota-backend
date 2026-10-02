@@ -9,6 +9,25 @@ import {
 import { BillingPeriod } from './billingPeriod.model';
 import { RepositoryError } from '@/shared/errors/custom.error';
 
+export interface BillingPeriodSettlementLine {
+  quotaId: string;
+  transactionId: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+}
+
+export interface BillingPeriodSettlementOutcome {
+  settlementId: string;
+  billingPeriodId: string;
+  creditCardId: string;
+  settledAt: string;
+  alreadySettled: boolean;
+  settledQuotaCount: number;
+  settledTotalAmount: number;
+  lines: BillingPeriodSettlementLine[];
+}
+
 export class BillingPeriodRepositorySupabase extends SupabaseRepository<BillingPeriod> {
   constructor(
     private readonly creditCardId: string,
@@ -100,6 +119,49 @@ export class BillingPeriodRepositorySupabase extends SupabaseRepository<BillingP
     }
 
     return this.mapRowToEntity(data as Record<string, unknown>);
+  }
+
+  async settleBillingPeriod(
+    billingPeriodId: string,
+    userId: string,
+  ): Promise<BillingPeriodSettlementOutcome> {
+    const { data, error } = await this.client().rpc('settle_billing_period', {
+      p_billing_period_id: billingPeriodId,
+      p_user_id: userId,
+    });
+
+    if (error) {
+      throw new RepositoryError(
+        `Error settling billing period: ${error.message}`,
+        500,
+      );
+    }
+
+    const row = (data as Record<string, unknown>[] | null)?.[0];
+    if (!row) {
+      throw new RepositoryError('Settlement RPC returned no outcome', 500);
+    }
+
+    const lines = Array.isArray(row.lines) ? row.lines : [];
+    return {
+      settlementId: row.settlement_id as string,
+      billingPeriodId: row.billing_period_id as string,
+      creditCardId: row.credit_card_id as string,
+      settledAt: row.settled_at as string,
+      alreadySettled: row.already_settled as boolean,
+      settledQuotaCount: Number(row.settled_quota_count),
+      settledTotalAmount: Number(row.settled_total_amount),
+      lines: lines.map((line) => {
+        const value = line as Record<string, unknown>;
+        return {
+          quotaId: value.quota_id as string,
+          transactionId: value.transaction_id as string,
+          amount: Number(value.amount),
+          currency: value.currency as string,
+          dueDate: value.due_date as string,
+        };
+      }),
+    };
   }
 
   /**
