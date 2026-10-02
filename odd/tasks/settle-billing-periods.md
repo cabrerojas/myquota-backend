@@ -140,7 +140,7 @@ warnings in `src/modules/stats/stats.service.ts` (unused disable directives).
 the local Supabase CLI is not installed (`/bin/bash: supabase: command not
 found`); no remote database was contacted and no integration proof is claimed.
 
-Task 5 complete before commit: full `npm test` passed (3 suites, 26 tests); the
+Task 5 complete: full `npm test` passed (3 suites, 26 tests); the
 Node process emitted the pre-existing `DEP0040` punycode deprecation warning.
 `npm run build` passed, with pre-existing `tscpaths` notices for removed
 Firebase repository aliases. `npm run lint` passed with the two unrelated
@@ -148,8 +148,13 @@ Firebase repository aliases. `npm run lint` passed with the two unrelated
 executed locally: Supabase CLI and `psql` are unavailable, and the local Docker
 daemon has no `postgres:16` image. The migration's focused static contract test
 is GREEN; database integration remains explicitly unproven until a local
-migrated Postgres/Supabase instance is available. Conventional work-unit commit:
-pending.
+migrated Postgres/Supabase instance is available. The implementation was
+committed on `feat/settle-billing-periods` as
+`fb8ab76d28d3e62cf99e111256570d04dceb876b`
+(`feat: settle billing periods atomically`). Observed commit contents include
+this task record, the settlement migration, billing-period implementation, and
+the focused settlement test; it contains 584 insertions and 68 deletions across
+eight files.
 
 ## ODD Mirror
 
@@ -157,4 +162,5 @@ Engram project: `myquota-backend`
 
 Topic key: `odd/settle-billing-periods/tasks`
 
-State: tasks 1–5 verified and mirrored; commit pending.
+State: tasks 1–5 verified and mirrored; implementation committed as
+`fb8ab76d28d3e62cf99e111256570d04dceb876b`.
