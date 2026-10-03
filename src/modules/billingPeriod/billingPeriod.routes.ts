@@ -1,13 +1,13 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { authenticate } from "@/shared/middlewares/auth.middleware";
 import { validate } from "@shared/middlewares/validate.middleware";
-import { createTransactionRepository, createBillingPeriodRepository } from "@/shared/classes/repository.factory";
+import { createBillingPeriodRepository } from "@/shared/classes/repository.factory";
 import { BillingPeriodController } from "./billingPeriod.controller";
 import { BillingPeriodService } from "./billingPeriod.service";
 import {
   createBillingPeriodSchema,
   updateBillingPeriodSchema,
-  payBillingPeriodSchema,
+  settleBillingPeriodSchema,
 } from "./billingPeriod.schemas";
 
 const createBillingPeriodRouter = (): Router => {
@@ -29,10 +29,8 @@ const createBillingPeriodRouter = (): Router => {
 
       try {
         const repository = createBillingPeriodRepository(userId, creditCardId);
-        const transactionRepository = createTransactionRepository(userId, creditCardId);
         const service = new BillingPeriodService(
           repository,
-          transactionRepository,
           creditCardId,
           userId,
         );
@@ -85,10 +83,10 @@ const createBillingPeriodRouter = (): Router => {
   );
 
   router.post(
-    "/creditCards/:creditCardId/billingPeriods/:billingPeriodId/pay",
-    validate(payBillingPeriodSchema),
+    "/creditCards/:creditCardId/billingPeriods/:billingPeriodId/settle",
+    validate(settleBillingPeriodSchema),
     (req: Request, res: Response) => {
-      return res.locals.billingPeriodController.payBillingPeriod(req, res);
+      return res.locals.billingPeriodController.settleBillingPeriod(req, res);
     },
   );
 

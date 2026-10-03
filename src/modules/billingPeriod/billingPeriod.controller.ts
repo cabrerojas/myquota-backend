@@ -119,22 +119,16 @@ export class BillingPeriodController {
     }
   };
 
-  payBillingPeriod = async (req: Request, res: Response): Promise<void> => {
+  settleBillingPeriod = async (req: Request, res: Response): Promise<void> => {
     try {
       const { billingPeriodId } = req.params;
-      const result = await this.service.payBillingPeriod(billingPeriodId);
-      const userId = req.user?.userId;
-      if (userId)
-        StatsService.triggerRecompute(userId, req.params.creditCardId);
+      const result = await this.service.settleBillingPeriod(billingPeriodId);
 
-      res.status(200).json({
-        message: `${result.paidCount} cuotas marcadas como pagadas`,
-        ...result,
-      });
+      res.status(200).json(result);
     } catch (error) {
-      console.error("Error paying billing period:", error);
+      console.error("Error settling billing period:", error);
       res.status(500).json({
-        message: "Error al pagar el período",
+        message: "Error al liquidar el período",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }

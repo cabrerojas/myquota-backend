@@ -16,4 +16,4 @@ export const createBillingPeriodSchema = z
 
 export const updateBillingPeriodSchema = createBillingPeriodSchema.partial();
 
-export const payBillingPeriodSchema = z.object({}).strict();
+export const settleBillingPeriodSchema = z.object({}).strict();
