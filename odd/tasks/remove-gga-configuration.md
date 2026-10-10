@@ -53,6 +53,10 @@ Remove only active Gentleman Guardian Angel (GGA) configuration and invocation f
 - 2026-10-10: Deleted ignored, untracked `.gga`, the `.git/info/exclude` `.gga` entry, and the GGA-only local `.git/hooks/pre-commit`. The `.gga` and `.git` changes are local evidence and cannot be committed.
 - 2026-10-10: `git diff --check` passed. The deleted local hook has no retained shell content to syntax-check. `git grep` found no active tracked GGA invocation outside `odd/`; the focused repository search found only this historical task record. `rg` is unavailable in this environment, so the dedicated search tool was used as the fallback. The effective global hook directory remains empty.
 - 2026-10-10: Created `1b0b563` (`chore: remove GGA configuration`) containing this task record. The ignored `.gga` deletion and `.git` hook/exclude changes remain local evidence and cannot be committed.
+- 2026-10-10: Global GGA removal phase: inspected `/home/gcabr/.config/gga/` (GGA rules and generated GGA configuration only) and `/home/gcabr/.local/share/gga/` (GGA cache, PR-mode, and provider libraries only) before deleting both complete directories. No historical backups or documentation were removed.
+- 2026-10-10: Removed only the `"gga"` component entry from `/home/gcabr/.gentle-ai/state.json`; all other state keys and components were retained. `python3` JSON validation passed and confirmed that `components` excludes `gga`.
+- 2026-10-10: Post-removal checks passed: both inspected global GGA directories are absent; `state.json` contains no `gga` text; and `git grep -n -i -e 'gga run' -e 'Gentleman Guardian Angel' -- ':!odd/**'` returned no active tracked invocation in either repository. `gga` remains discoverable on `PATH`, but no configuration or invocation was found in the inspected active locations and the executable was outside the authorized deletion scope.
+- 2026-10-10: No native review was started or retried. The prior provider-default review block remains recorded; this phase was explicitly performed without GGA or review execution.
 
 ## Next Step
 
