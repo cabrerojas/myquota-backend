@@ -37,7 +37,7 @@ Remove only active Gentleman Guardian Angel (GGA) configuration and invocation f
 2. [completed] Inspect the effective global hook directory and decide whether any safe GGA-only removal is needed.
 3. [completed] Remove confirmed backend-local GGA configuration and hooks only.
 4. [completed] Run focused validation and syntax checks.
-5. [in_progress] Commit only tracked backend changes for this work unit.
+5. [completed] Commit only tracked backend changes for this work unit.
 
 ## Status and Progress
 
@@ -52,7 +52,8 @@ Remove only active Gentleman Guardian Angel (GGA) configuration and invocation f
 - 2026-10-10: Inspected effective global hook directory after confirming `core.hooksPath`; it is empty, so no global GGA removal is required.
 - 2026-10-10: Deleted ignored, untracked `.gga`, the `.git/info/exclude` `.gga` entry, and the GGA-only local `.git/hooks/pre-commit`. The `.gga` and `.git` changes are local evidence and cannot be committed.
 - 2026-10-10: `git diff --check` passed. The deleted local hook has no retained shell content to syntax-check. `git grep` found no active tracked GGA invocation outside `odd/`; the focused repository search found only this historical task record. `rg` is unavailable in this environment, so the dedicated search tool was used as the fallback. The effective global hook directory remains empty.
+- 2026-10-10: Created `1b0b563` (`chore: remove GGA configuration`) containing this task record. The ignored `.gga` deletion and `.git` hook/exclude changes remain local evidence and cannot be committed.
 
 ## Next Step
 
-Stage this task record only; commit after reviewing the focused diff.
+No further configuration removal is needed. The backend worktree is otherwise clean.
