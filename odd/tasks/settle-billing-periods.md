@@ -56,6 +56,10 @@ that future debt.
    settlement-specific data.
 5. Make tests GREEN, run focused tests, lint, build/typecheck, and local SQL
    validation; record actual results and commit evidence.
+6. Reopen for the production `plpgsql.variable_conflict=error` defect: replace
+   both ambiguous `ON CONFLICT` inference targets with their verified named
+   constraints in migration 006, add a forward function-replacement migration,
+   and record static and future integration verification.
 
 ## TDD and Checks
 
@@ -156,11 +160,52 @@ this task record, the settlement migration, billing-period implementation, and
 the focused settlement test; it contains 584 insertions and 68 deletions across
 eight files.
 
+Task 6 reopened: production `settle_billing_period(uuid, uuid)` failed before
+creating a settlement because its `RETURNS TABLE` output variables conflict
+with bare `ON CONFLICT (billing_period_id)` and `ON CONFLICT (settlement_id,
+quota_id)` targets under `plpgsql.variable_conflict=error`. The verified
+constraint names are `billing_period_settlements_billing_period_id_key` and
+`billing_period_settlement_lines_settlement_id_quota_id_key`. The July retry is
+safe after deploying the forward migration: the failed invocation rolled back
+with no settlement or lines, zero quotas paid, and 81 eligible quotas still
+pending. This task is in progress; its RED/GREEN results, local validation
+limitations, commit identity, and deployment action will be recorded here.
+
+Task 6 RED: `npm test -- --runTestsByPath
+src/modules/billingPeriod/billingPeriod.settlement.spec.ts` failed with two
+expected assertions: migration 006 still used the bare settlement conflict
+target, and forward migration 007 did not exist.
+
+Task 6 GREEN: migration 006 now uses `ON CONFLICT ON CONSTRAINT
+billing_period_settlements_billing_period_id_key DO NOTHING` and `ON CONFLICT
+ON CONSTRAINT billing_period_settlement_lines_settlement_id_quota_id_key DO
+NOTHING`. Forward migration
+`007_fix_settle_billing_period_conflict_targets.sql` replaces only the deployed
+function and preserves its body, `SECURITY INVOKER`, empty search path, revoke,
+and service-role grant. Focused tests passed: 1 suite, 6 tests. Full tests
+passed: 3 suites, 28 tests. `npm run lint` passed with two pre-existing unused
+disable-directive warnings in `src/modules/stats/stats.service.ts`; `npm run
+build` passed with pre-existing `tscpaths` notices for removed Firebase aliases;
+and `git diff --check` passed. The first parallel full-test attempt timed out
+while build and lint ran concurrently; the isolated retry passed in 133.805s.
+
+Local SQL execution remains unavailable: the Supabase CLI and `psql` are not
+installed, and the local Docker daemon has no `postgres:16` image. The static
+contract test asserts both named targets and byte-for-byte function/privilege
+parity between migrations 006 and 007, but it is not database integration
+proof. After applying 007 to a non-production migrated database, run
+`SET plpgsql.variable_conflict = 'error'`, invoke
+`settle_billing_period` for a period with eligible pending quotas, and assert
+one settlement, one line per settled quota, paid quota updates, and idempotent
+retry. No database was contacted or mutated for this task.
+
 ## ODD Mirror
 
 Engram project: `myquota-backend`
 
 Topic key: `odd/settle-billing-periods/tasks`
 
-State: tasks 1–5 verified and mirrored; implementation committed as
+State: tasks 1–5 verified; task 6 implementation and verification are complete
+and mirrored. Commit identity and the required deployment action are recorded
+after the work-unit commit. The original implementation was committed as
 `fb8ab76d28d3e62cf99e111256570d04dceb876b`.

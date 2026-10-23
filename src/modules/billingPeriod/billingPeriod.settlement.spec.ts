@@ -66,8 +66,14 @@ describe("settle_billing_period migration contract", () => {
     process.cwd(),
     "supabase/migrations/006_settle_billing_periods.sql",
   );
+  const conflictFixMigrationPath = join(
+    process.cwd(),
+    "supabase/migrations/007_fix_settle_billing_period_conflict_targets.sql",
+  );
 
   const readMigration = (): string => readFileSync(migrationPath, "utf8");
+  const readConflictFixMigration = (): string =>
+    readFileSync(conflictFixMigrationPath, "utf8");
 
   it("uses transaction-date statement membership and preserves future installments", () => {
     const migration = readMigration();
@@ -86,8 +92,44 @@ describe("settle_billing_period migration contract", () => {
     expect(migration).toMatch(/CREATE TABLE.*billing_period_settlements/is);
     expect(migration).toMatch(/CREATE TABLE.*billing_period_settlement_lines/is);
     expect(migration).toMatch(/UNIQUE\s*\(billing_period_id\)/i);
-    expect(migration).toMatch(/ON CONFLICT\s*\(billing_period_id\)/i);
+    expect(migration).toMatch(
+      /ON CONFLICT\s+ON CONSTRAINT\s+billing_period_settlements_billing_period_id_key\s+DO NOTHING/i,
+    );
+    expect(migration).toMatch(
+      /ON CONFLICT\s+ON CONSTRAINT\s+billing_period_settlement_lines_settlement_id_quota_id_key\s+DO NOTHING/i,
+    );
     expect(migration).toMatch(/settled_total_amount\s+NUMERIC\(12,\s*2\)\s+NOT NULL\s+DEFAULT\s+0/i);
     expect(migration).not.toMatch(/LIMIT\s+50/i);
+  });
+
+  it("replaces the deployed function with the two named conflict constraints", () => {
+    const migration = readConflictFixMigration();
+
+    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.settle_billing_period/i);
+    expect(migration).toMatch(
+      /ON CONFLICT\s+ON CONSTRAINT\s+billing_period_settlements_billing_period_id_key\s+DO NOTHING/i,
+    );
+    expect(migration).toMatch(
+      /ON CONFLICT\s+ON CONSTRAINT\s+billing_period_settlement_lines_settlement_id_quota_id_key\s+DO NOTHING/i,
+    );
+    expect(migration).toMatch(/SECURITY INVOKER/i);
+    expect(migration).toMatch(/SET search_path = ''/i);
+    expect(migration).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.settle_billing_period\(UUID, UUID\) TO service_role/i,
+    );
+  });
+
+  it("preserves the original function behavior and privilege statements", () => {
+    const originalMigration = readMigration();
+    const conflictFixMigration = readConflictFixMigration();
+    const functionPattern = /CREATE OR REPLACE FUNCTION public\.settle_billing_period[\s\S]*?\$\$;/i;
+    const privilegePattern = /REVOKE EXECUTE[\s\S]*?GRANT EXECUTE ON FUNCTION public\.settle_billing_period\(UUID, UUID\) TO service_role;/i;
+
+    expect(conflictFixMigration.match(functionPattern)?.[0]).toBe(
+      originalMigration.match(functionPattern)?.[0],
+    );
+    expect(conflictFixMigration.match(privilegePattern)?.[0]).toBe(
+      originalMigration.match(privilegePattern)?.[0],
+    );
   });
 });

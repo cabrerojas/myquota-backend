@@ -137,7 +137,7 @@ BEGIN
     user_id
   )
   VALUES (v_period.id, v_period.credit_card_id, p_user_id)
-  ON CONFLICT (billing_period_id) DO NOTHING
+  ON CONFLICT ON CONSTRAINT billing_period_settlements_billing_period_id_key DO NOTHING
   RETURNING * INTO v_settlement;
 
   IF v_settlement.id IS NULL THEN
@@ -191,7 +191,7 @@ BEGIN
     )
     SELECT v_settlement.id, id, transaction_id, amount, currency, due_date
     FROM eligible
-    ON CONFLICT (settlement_id, quota_id) DO NOTHING
+    ON CONFLICT ON CONSTRAINT billing_period_settlement_lines_settlement_id_quota_id_key DO NOTHING
     RETURNING quota_id
   ), paid AS (
     UPDATE public.quotas q
