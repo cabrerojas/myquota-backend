@@ -56,18 +56,45 @@ export class TransactionRepositorySupabase extends SupabaseRepository<Transactio
       }
     }
 
-    // Ordering
+    // Ordering. Add the primary key as a deterministic tie-breaker so cursor
+    // pages remain stable when multiple transactions share the same date.
     const orderByField = camelToSnake(pagination?.orderBy || 'created_at');
     const orderDirection = pagination?.orderDirection || 'desc';
-    query = query.order(orderByField, { ascending: orderDirection === 'asc' });
+    const ascending = orderDirection === 'asc';
+    query = query
+      .order(orderByField, { ascending })
+      .order('id', { ascending });
 
     // Limit +1 for hasMore detection
     const limit = pagination?.limit || 50;
     query = query.limit(limit + 1);
 
-    // Cursor (key-set pagination)
+    // Cursor (key-set pagination). Transaction listing orders by date, so use
+    // the cursor row's ordered value rather than comparing an unrelated UUID.
     if (pagination?.startAfter) {
-      query = query.gt('id', pagination.startAfter);
+      const { data: cursorRow, error: cursorError } = await this.client()
+        .from(this.tableName)
+        .select('*')
+        .eq('id', pagination.startAfter)
+        .eq('credit_card_id', this.creditCardId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (cursorError) {
+        throw new RepositoryError(`Error finding transaction cursor: ${cursorError.message}`, 500);
+      }
+      if (!cursorRow) {
+        throw new RepositoryError('Transaction cursor not found', 400);
+      }
+
+      const cursorRecord = cursorRow as Record<string, unknown>;
+      const cursorValue = cursorRecord[orderByField] as string | number;
+      const cursorId = cursorRecord.id as string;
+      const comparator = ascending ? 'gt' : 'lt';
+      const tieBreaker = ascending ? 'gt' : 'lt';
+      query = query.or(
+        `${orderByField}.${comparator}.${cursorValue},and(${orderByField}.eq.${cursorValue},id.${tieBreaker}.${cursorId})`,
+      );
     }
 
     const { data, error } = await query;
